@@ -5,10 +5,22 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, Users, Flag, ArrowRight } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function CreateEvent() {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+    }
+  }, [user, loading, navigate]);
+
   return (
-    <AppLayout isAuthenticated={true}>
+    <AppLayout>
       <div className="container py-8 max-w-2xl">
         <div className="mb-8 animate-fade-in">
           <h1 className="text-3xl font-semibold mb-2">Create Event</h1>
@@ -86,26 +98,11 @@ export default function CreateEvent() {
                 <Users className="h-4 w-4 text-muted-foreground" />
                 Invite Friends
               </Label>
-              <div className="space-y-2 p-4 rounded-lg bg-secondary/50">
-                {[
-                  { name: "Alex Rivera", selected: true },
-                  { name: "Emma Wilson", selected: false },
-                  { name: "James Park", selected: true },
-                ].map((friend, i) => (
-                  <label
-                    key={i}
-                    className="flex items-center gap-3 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      defaultChecked={friend.selected}
-                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                    />
-                    <span className={friend.selected ? "text-foreground" : "text-muted-foreground"}>
-                      {friend.name}
-                    </span>
-                  </label>
-                ))}
+              <div className="flex flex-col items-center justify-center p-6 rounded-lg bg-secondary/50 text-center">
+                <Users className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  Add friends first to invite them to events
+                </p>
               </div>
             </div>
 

@@ -1,26 +1,32 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MOCK_EVENTS = [
-  { day: 5, title: "Coffee with Alex", priority: "low" },
-  { day: 12, title: "Team Dinner", priority: "medium" },
-  { day: 18, title: "Movie Night", priority: "high" },
-  { day: 25, title: "Birthday Party", priority: "medium" },
-];
 
 export default function CalendarPage() {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+    }
+  }, [user, loading, navigate]);
+
   const today = new Date();
   const currentMonth = today.toLocaleString("default", { month: "long", year: "numeric" });
   
   // Generate days for current month (simplified)
-  const daysInMonth = 31;
-  const firstDayOfWeek = 0; // Sunday
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const firstDayOfWeek = new Date(today.getFullYear(), today.getMonth(), 1).getDay();
 
   return (
-    <AppLayout isAuthenticated={true}>
+    <AppLayout>
       <div className="container py-8">
         <div className="mb-8 animate-fade-in">
           <h1 className="text-3xl font-semibold mb-2">Calendar</h1>
@@ -61,7 +67,6 @@ export default function CalendarPage() {
                 {/* Day cells */}
                 {Array.from({ length: daysInMonth }).map((_, i) => {
                   const day = i + 1;
-                  const event = MOCK_EVENTS.find((e) => e.day === day);
                   const isToday = day === today.getDate();
                   
                   return (
@@ -75,19 +80,6 @@ export default function CalendarPage() {
                         <span className={`text-sm ${isToday ? "font-bold text-primary" : ""}`}>
                           {day}
                         </span>
-                        {event && (
-                          <div
-                            className={`mt-auto text-xs truncate px-1 py-0.5 rounded ${
-                              event.priority === "low"
-                                ? "bg-priority-low/20 text-priority-low"
-                                : event.priority === "medium"
-                                ? "bg-priority-medium/20 text-priority-medium"
-                                : "bg-priority-high/20 text-priority-high"
-                            }`}
-                          >
-                            {event.title}
-                          </div>
-                        )}
                       </div>
                     </div>
                   );
@@ -101,29 +93,13 @@ export default function CalendarPage() {
             <CardHeader>
               <CardTitle className="text-lg">This Month</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {MOCK_EVENTS.map((event, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50"
-                >
-                  <div
-                    className={`h-2 w-2 rounded-full ${
-                      event.priority === "low"
-                        ? "bg-priority-low"
-                        : event.priority === "medium"
-                        ? "bg-priority-medium"
-                        : "bg-priority-high"
-                    }`}
-                  />
-                  <div>
-                    <p className="font-medium text-sm">{event.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {currentMonth.split(" ")[0]} {event.day}
-                    </p>
-                  </div>
+            <CardContent>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
+                  <Calendar className="h-6 w-6 text-primary" />
                 </div>
-              ))}
+                <p className="text-sm text-muted-foreground">No events this month</p>
+              </div>
             </CardContent>
           </Card>
         </div>

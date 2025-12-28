@@ -1,11 +1,9 @@
-import { Link, useLocation } from "react-router-dom";
-import { Calendar, Users, Bell, Plus, LayoutDashboard, LogIn } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Calendar, Users, Bell, Plus, LayoutDashboard, LogIn, LogOut, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-interface NavbarProps {
-  isAuthenticated?: boolean;
-}
+import { useAuth } from "@/contexts/AuthContext";
+import { useState } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -14,8 +12,18 @@ const navItems = [
   { href: "/notifications", label: "Notifications", icon: Bell },
 ];
 
-export function Navbar({ isAuthenticated = false }: NavbarProps) {
+export function Navbar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
+
+  const isAuthenticated = !!user;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
@@ -28,7 +36,7 @@ export function Navbar({ isAuthenticated = false }: NavbarProps) {
           <span className="text-xl font-semibold tracking-tight">SyncMates</span>
         </Link>
 
-        {/* Navigation */}
+        {/* Desktop Navigation */}
         {isAuthenticated ? (
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map((item) => {
@@ -50,8 +58,8 @@ export function Navbar({ isAuthenticated = false }: NavbarProps) {
           </nav>
         ) : null}
 
-        {/* Actions */}
-        <div className="flex items-center gap-3">
+        {/* Desktop Actions */}
+        <div className="hidden md:flex items-center gap-3">
           {isAuthenticated ? (
             <>
               <Link to="/create-event">
@@ -60,9 +68,15 @@ export function Navbar({ isAuthenticated = false }: NavbarProps) {
                   <span className="hidden sm:inline">Create Event</span>
                 </Button>
               </Link>
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-medium text-primary">U</span>
-              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleSignOut}
+                className="gap-2 text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign Out
+              </Button>
             </>
           ) : (
             <Link to="/auth">
@@ -73,7 +87,77 @@ export function Navbar({ isAuthenticated = false }: NavbarProps) {
             </Link>
           )}
         </div>
+
+        {/* Mobile Menu Button */}
+        <button
+          className="md:hidden p-2"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          {mobileMenuOpen ? (
+            <X className="h-6 w-6" />
+          ) : (
+            <Menu className="h-6 w-6" />
+          )}
+        </button>
       </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden border-t border-border/50 bg-background animate-fade-in">
+          <nav className="container py-4 space-y-2">
+            {isAuthenticated ? (
+              <>
+                {navItems.map((item) => {
+                  const isActive = location.pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+                        isActive 
+                          ? "bg-primary/10 text-primary" 
+                          : "text-muted-foreground hover:bg-secondary"
+                      )}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+                <Link
+                  to="/create-event"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary text-primary-foreground"
+                >
+                  <Plus className="h-5 w-5" />
+                  Create Event
+                </Link>
+                <button
+                  onClick={() => {
+                    handleSignOut();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
+                >
+                  <LogOut className="h-5 w-5" />
+                  Sign Out
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/auth"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary text-primary-foreground"
+              >
+                <LogIn className="h-5 w-5" />
+                Sign In
+              </Link>
+            )}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }

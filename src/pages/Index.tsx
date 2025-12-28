@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Calendar, Users, Clock, ArrowRight, Check, Sparkles } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import heroIllustration from "@/assets/hero-illustration.png";
 
 const features = [
@@ -23,8 +24,10 @@ const features = [
 ];
 
 export default function Index() {
+  const { user } = useAuth();
+
   return (
-    <AppLayout isAuthenticated={false}>
+    <AppLayout>
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         {/* Animated background shapes */}
@@ -76,17 +79,28 @@ export default function Index() {
                 No more endless group chats — just simple, beautiful scheduling.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <Link to="/auth">
-                  <Button size="lg" className="gap-2 w-full sm:w-auto shadow-soft">
-                    Get Started Free
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link to="/dashboard">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                    View Demo
-                  </Button>
-                </Link>
+                {user ? (
+                  <Link to="/dashboard">
+                    <Button size="lg" className="gap-2 w-full sm:w-auto shadow-soft">
+                      Go to Dashboard
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <>
+                    <Link to="/auth">
+                      <Button size="lg" className="gap-2 w-full sm:w-auto shadow-soft">
+                        Get Started Free
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                    <Link to="/dashboard">
+                      <Button variant="outline" size="lg" className="w-full sm:w-auto">
+                        View Demo
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
 
@@ -189,12 +203,21 @@ export default function Index() {
                 </div>
               ))}
             </div>
-            <Link to="/auth">
-              <Button size="lg" className="gap-2 shadow-soft">
-                Create Your Account
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            {user ? (
+              <Link to="/dashboard">
+                <Button size="lg" className="gap-2 shadow-soft">
+                  Go to Dashboard
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/auth">
+                <Button size="lg" className="gap-2 shadow-soft">
+                  Create Your Account
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </section>
