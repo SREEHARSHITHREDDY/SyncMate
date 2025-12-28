@@ -88,47 +88,53 @@ export function NotificationPreferencesCard() {
           />
         </div>
 
-        {/* Push Notifications */}
-        {pushSupported && (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                <Smartphone className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="push-enabled" className="font-medium">
-                    Push Notifications
-                  </Label>
-                  {permission === 'denied' && (
-                    <Badge variant="destructive" className="text-xs">Blocked</Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Receive browser push notifications
-                </p>
-              </div>
+{/* Push Notifications */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-accent/10 flex items-center justify-center">
+              <Smartphone className="h-5 w-5 text-accent" />
             </div>
-            <Switch
-              id="push-enabled"
-              checked={isSubscribed}
-              onCheckedChange={async (checked) => {
-                try {
-                  if (checked) {
-                    await enablePush();
-                    toast.success("Push notifications enabled");
-                  } else {
-                    await disablePush();
-                    toast.success("Push notifications disabled");
-                  }
-                } catch (error: any) {
-                  toast.error(error.message || "Failed to update push notifications");
+            <div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="push-enabled" className="font-medium">
+                  Push Notifications
+                </Label>
+                {!pushSupported && (
+                  <Badge variant="secondary" className="text-xs">Not Supported</Badge>
+                )}
+                {pushSupported && permission === 'denied' && (
+                  <Badge variant="destructive" className="text-xs">Blocked in Browser</Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {!pushSupported 
+                  ? "Your browser doesn't support push notifications"
+                  : permission === 'denied'
+                  ? "Enable notifications in your browser settings"
+                  : "Receive browser push notifications"
                 }
-              }}
-              disabled={isEnabling || isDisabling || permission === 'denied'}
-            />
+              </p>
+            </div>
           </div>
-        )}
+          <Switch
+            id="push-enabled"
+            checked={isSubscribed}
+            onCheckedChange={async (checked) => {
+              try {
+                if (checked) {
+                  await enablePush();
+                  toast.success("Push notifications enabled");
+                } else {
+                  await disablePush();
+                  toast.success("Push notifications disabled");
+                }
+              } catch (error: any) {
+                toast.error(error.message || "Failed to update push notifications");
+              }
+            }}
+            disabled={!pushSupported || isEnabling || isDisabling || permission === 'denied'}
+          />
+        </div>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
