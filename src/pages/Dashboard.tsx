@@ -13,6 +13,7 @@ import { EventInviteCard } from "@/components/EventInviteCard";
 import { EventCard } from "@/components/EventCard";
 import { EditEventDialog } from "@/components/EditEventDialog";
 import { PriorityFilter } from "@/components/PriorityFilter";
+import { CancelOccurrenceDialog } from "@/components/CancelOccurrenceDialog";
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const { events, pendingInvites } = useEvents();
   const { unreadCount } = useNotifications();
   const [editingEvent, setEditingEvent] = useState<EventWithResponse | null>(null);
+  const [cancellingEvent, setCancellingEvent] = useState<EventWithResponse | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high">("all");
 
   useEffect(() => {
@@ -167,6 +169,7 @@ export default function Dashboard() {
                     key={event.id}
                     event={event}
                     onEdit={setEditingEvent}
+                    onCancelOccurrence={setCancellingEvent}
                   />
                 ))}
               </div>
@@ -217,6 +220,13 @@ export default function Dashboard() {
           event={editingEvent}
           open={!!editingEvent}
           onOpenChange={(open) => !open && setEditingEvent(null)}
+        />
+
+        {/* Cancel Occurrence Dialog */}
+        <CancelOccurrenceDialog
+          event={cancellingEvent}
+          open={!!cancellingEvent}
+          onOpenChange={(open) => !open && setCancellingEvent(null)}
         />
       </div>
     </AppLayout>

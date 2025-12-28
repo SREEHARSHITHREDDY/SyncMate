@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      event_exceptions: {
+        Row: {
+          created_at: string
+          event_id: string
+          exception_date: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          exception_date: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          exception_date?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_exceptions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_responses: {
         Row: {
           created_at: string
@@ -115,6 +144,36 @@ export type Database = {
           requester_id?: string
           status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      notification_preferences: {
+        Row: {
+          created_at: string
+          email_enabled: boolean
+          id: string
+          remind_1_day: boolean
+          remind_1_hour: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_enabled?: boolean
+          id?: string
+          remind_1_day?: boolean
+          remind_1_hour?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_enabled?: boolean
+          id?: string
+          remind_1_day?: boolean
+          remind_1_hour?: boolean
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

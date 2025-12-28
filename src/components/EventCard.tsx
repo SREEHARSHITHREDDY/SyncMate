@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { 
   Calendar, 
   Clock, 
@@ -9,7 +10,9 @@ import {
   Check, 
   X, 
   HelpCircle,
-  Loader2 
+  Loader2,
+  Repeat,
+  CalendarX
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useState } from "react";
@@ -46,10 +49,11 @@ interface Attendee {
 interface EventCardProps {
   event: EventWithResponse;
   onEdit?: (event: EventWithResponse) => void;
+  onCancelOccurrence?: (event: EventWithResponse) => void;
   showActions?: boolean;
 }
 
-export function EventCard({ event, onEdit, showActions = true }: EventCardProps) {
+export function EventCard({ event, onEdit, onCancelOccurrence, showActions = true }: EventCardProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -155,7 +159,15 @@ export function EventCard({ event, onEdit, showActions = true }: EventCardProps)
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <div className={`h-2 w-2 rounded-full mt-2 shrink-0 ${getPriorityColor(event.priority)}`} />
             <div className="flex-1 min-w-0">
-              <h4 className="font-medium truncate">{event.title}</h4>
+              <div className="flex items-center gap-2">
+                <h4 className="font-medium truncate">{event.title}</h4>
+                {(event as any).recurrence_type && (
+                  <Badge variant="secondary" className="gap-1 text-xs shrink-0">
+                    <Repeat className="h-3 w-3" />
+                    {(event as any).recurrence_type}
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1 flex-wrap">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
@@ -176,6 +188,21 @@ export function EventCard({ event, onEdit, showActions = true }: EventCardProps)
 
           {showActions && event.isCreator && (
             <div className="flex items-center gap-1">
+              {(event as any).recurrence_type && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => onCancelOccurrence?.(event)}
+                    >
+                      <CalendarX className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Cancel specific occurrence</TooltipContent>
+                </Tooltip>
+              )}
               <Button
                 size="icon"
                 variant="ghost"
