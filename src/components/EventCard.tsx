@@ -1,0 +1,288 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { 
+  Calendar, 
+  Clock, 
+  Pencil, 
+  Trash2, 
+  Users, 
+  Check, 
+  X, 
+  HelpCircle,
+  Loader2 
+} from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { EventWithResponse } from "@/hooks/useEvents";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+interface Attendee {
+  user_id: string;
+  response: string;
+  profile: {
+    name: string;
+    avatar_url: string | null;
+  } | null;
+}
+
+interface EventCardProps {
+  event: EventWithResponse;
+  onEdit?: (event: EventWithResponse) => void;
+  showActions?: boolean;
+}
+
+export function EventCard({ event, onEdit, showActions = true }: EventCardProps) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [loadingAttendees, setLoadingAttendees] = useState(false);
+  const [showAttendees, setShowAttendees] = useState(false);
+
+  const handleDelete = async () => {
+    if (!user) return;
+    setIsDeleting(true);
+
+    try {
+      const { error } = await supabase
+        .from("events")
+        .delete()
+        .eq("id", event.id)
+        .eq("creator_id", user.id);
+
+      if (error) throw error;
+
+      toast.success("Event deleted");
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      setShowDeleteDialog(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete event");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const loadAttendees = async () => {
+    if (attendees.length > 0) {
+      setShowAttendees(!showAttendees);
+      return;
+    }
+
+    setLoadingAttendees(true);
+    try {
+      const { data, error } = await supabase
+        .from("event_responses")
+        .select("user_id, response, profiles:user_id(name, avatar_url)")
+        .eq("event_id", event.id);
+
+      if (error) throw error;
+
+      const formatted = (data || []).map((r: any) => ({
+        user_id: r.user_id,
+        response: r.response,
+        profile: r.profiles,
+      }));
+
+      setAttendees(formatted);
+      setShowAttendees(true);
+    } catch (error: any) {
+      toast.error("Failed to load attendees");
+    } finally {
+      setLoadingAttendees(false);
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "low":
+        return "bg-priority-low";
+      case "high":
+        return "bg-priority-high";
+      default:
+        return "bg-priority-medium";
+    }
+  };
+
+  const getResponseIcon = (response: string) => {
+    switch (response) {
+      case "yes":
+        return <Check className="h-3 w-3 text-primary" />;
+      case "no":
+        return <X className="h-3 w-3 text-destructive" />;
+      case "maybe":
+        return <HelpCircle className="h-3 w-3 text-warning" />;
+      default:
+        return <Clock className="h-3 w-3 text-muted-foreground" />;
+    }
+  };
+
+  const getResponseLabel = (response: string) => {
+    switch (response) {
+      case "yes":
+        return "Going";
+      case "no":
+        return "Not going";
+      case "maybe":
+        return "Maybe";
+      default:
+        return "Pending";
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden transition-all hover:shadow-md">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className={`h-2 w-2 rounded-full mt-2 shrink-0 ${getPriorityColor(event.priority)}`} />
+            <div className="flex-1 min-w-0">
+              <h4 className="font-medium truncate">{event.title}</h4>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1 flex-wrap">
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {format(parseISO(event.event_date), "MMM d, yyyy")}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {event.event_time.slice(0, 5)}
+                </span>
+              </div>
+              {event.description && (
+                <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                  {event.description}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {showActions && event.isCreator && (
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => onEdit?.(event)}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <DialogTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Delete Event</DialogTitle>
+                    <DialogDescription>
+                      Are you sure you want to delete "{event.title}"? This action cannot be undone.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDeleteDialog(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
+                      Delete
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+        </div>
+
+        {/* Attendees section */}
+        <div className="mt-3 pt-3 border-t border-border">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2 text-muted-foreground hover:text-foreground px-2 -ml-2"
+            onClick={loadAttendees}
+            disabled={loadingAttendees}
+          >
+            {loadingAttendees ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Users className="h-3 w-3" />
+            )}
+            {showAttendees ? "Hide attendees" : "Show attendees"}
+          </Button>
+
+          {showAttendees && attendees.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {attendees.map((attendee) => (
+                <div
+                  key={attendee.user_id}
+                  className="flex items-center justify-between gap-2 p-2 rounded-lg bg-secondary/50"
+                >
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={attendee.profile?.avatar_url || undefined} />
+                      <AvatarFallback className="text-xs">
+                        {attendee.profile?.name?.charAt(0).toUpperCase() || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium">
+                      {attendee.profile?.name || "Unknown"}
+                    </span>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <div className="flex items-center gap-1">
+                        {getResponseIcon(attendee.response)}
+                        <span className="text-xs text-muted-foreground">
+                          {getResponseLabel(attendee.response)}
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {attendee.profile?.name} is {getResponseLabel(attendee.response).toLowerCase()}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showAttendees && attendees.length === 0 && (
+            <p className="text-sm text-muted-foreground mt-2">No invitees for this event</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
