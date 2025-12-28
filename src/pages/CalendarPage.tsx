@@ -13,6 +13,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PriorityFilter } from "@/components/PriorityFilter";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -21,6 +22,13 @@ export default function CalendarPage() {
   const navigate = useNavigate();
   const { events } = useEvents();
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high">("all");
+
+  // Filter events by priority
+  const filteredEvents = useMemo(() => {
+    if (priorityFilter === "all") return events;
+    return events.filter((e) => e.priority === priorityFilter);
+  }, [events, priorityFilter]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -37,7 +45,7 @@ export default function CalendarPage() {
   const firstDayOfWeek = calendarDays[0]?.getDay() || 0;
 
   const getEventsForDay = (day: Date): EventWithResponse[] => {
-    return events.filter((event) => {
+    return filteredEvents.filter((event) => {
       const eventDate = parseISO(event.event_date);
       return isSameDay(eventDate, day);
     });
@@ -55,11 +63,11 @@ export default function CalendarPage() {
   };
 
   const monthEvents = useMemo(() => {
-    return events.filter((event) => {
+    return filteredEvents.filter((event) => {
       const eventDate = parseISO(event.event_date);
       return isSameMonth(eventDate, currentMonth);
     });
-  }, [events, currentMonth]);
+  }, [filteredEvents, currentMonth]);
 
   const goToPrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const goToNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -79,6 +87,11 @@ export default function CalendarPage() {
               Create Event
             </Button>
           </Link>
+        </div>
+
+        {/* Priority Filter */}
+        <div className="mb-6 animate-fade-in" style={{ animationDelay: '0.05s' }}>
+          <PriorityFilter value={priorityFilter} onChange={setPriorityFilter} />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
