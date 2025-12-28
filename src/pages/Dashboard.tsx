@@ -9,6 +9,14 @@ import { useEvents } from "@/hooks/useEvents";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
+import { EventInviteCard } from "@/components/EventInviteCard";
+
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+};
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -58,7 +66,7 @@ export default function Dashboard() {
       <div className="container py-8">
         {/* Welcome Section */}
         <div className="mb-8 animate-fade-in">
-          <h1 className="text-3xl font-semibold mb-2">Good morning, {userName}! 👋</h1>
+          <h1 className="text-3xl font-semibold mb-2">{getGreeting()}, {userName}! 👋</h1>
           <p className="text-muted-foreground">Here's what's happening with your plans</p>
         </div>
 
@@ -187,6 +195,28 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Pending Event Invites */}
+        {pendingInvites.length > 0 && (
+          <Card className="animate-fade-in mt-6" style={{ animationDelay: '0.35s' }}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-warning" />
+                Event Invitations
+              </CardTitle>
+              <CardDescription>
+                You have {pendingInvites.length} pending invitation{pendingInvites.length > 1 ? "s" : ""}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
+                {pendingInvites.map((invite) => (
+                  <EventInviteCard key={invite.id} event={invite} />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppLayout>
   );
