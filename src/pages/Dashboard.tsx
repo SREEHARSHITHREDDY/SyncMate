@@ -1,14 +1,28 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Users, Bell, Clock } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+    }
+  }, [user, loading, navigate]);
+
+  const userName = user?.user_metadata?.name || "there";
+
   return (
-    <AppLayout isAuthenticated={true}>
+    <AppLayout>
       <div className="container py-8">
         {/* Welcome Section */}
         <div className="mb-8 animate-fade-in">
-          <h1 className="text-3xl font-semibold mb-2">Good morning! 👋</h1>
+          <h1 className="text-3xl font-semibold mb-2">Good morning, {userName}! 👋</h1>
           <p className="text-muted-foreground">Here's what's happening with your plans</p>
         </div>
 
@@ -22,7 +36,7 @@ export default function Dashboard() {
               <Calendar className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">3</div>
+              <div className="text-2xl font-bold">0</div>
               <p className="text-xs text-muted-foreground">This week</p>
             </CardContent>
           </Card>
@@ -35,7 +49,7 @@ export default function Dashboard() {
               <Users className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">2</div>
+              <div className="text-2xl font-bold">0</div>
               <p className="text-xs text-muted-foreground">Pending</p>
             </CardContent>
           </Card>
@@ -48,7 +62,7 @@ export default function Dashboard() {
               <Bell className="h-4 w-4 text-warning" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">5</div>
+              <div className="text-2xl font-bold">0</div>
               <p className="text-xs text-muted-foreground">Awaiting response</p>
             </CardContent>
           </Card>
@@ -61,8 +75,8 @@ export default function Dashboard() {
               <Clock className="h-4 w-4 text-info" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">2h</div>
-              <p className="text-xs text-muted-foreground">Coffee with Alex</p>
+              <div className="text-2xl font-bold">—</div>
+              <p className="text-xs text-muted-foreground">No upcoming events</p>
             </CardContent>
           </Card>
         </div>
@@ -71,39 +85,17 @@ export default function Dashboard() {
         <Card className="animate-fade-in" style={{ animationDelay: '0.3s' }}>
           <CardHeader>
             <CardTitle>Upcoming Plans</CardTitle>
-            <CardDescription>Looks like you have some plans coming up</CardDescription>
+            <CardDescription>Your scheduled events will appear here</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {[
-                { title: "Coffee with Alex", time: "Today, 2:00 PM", priority: "low" },
-                { title: "Team Dinner", time: "Tomorrow, 7:00 PM", priority: "medium" },
-                { title: "Movie Night", time: "Saturday, 8:00 PM", priority: "high" },
-              ].map((event, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`h-2 w-2 rounded-full ${
-                        event.priority === "low"
-                          ? "bg-priority-low"
-                          : event.priority === "medium"
-                          ? "bg-priority-medium"
-                          : "bg-priority-high"
-                      }`}
-                    />
-                    <div>
-                      <p className="font-medium">{event.title}</p>
-                      <p className="text-sm text-muted-foreground">{event.time}</p>
-                    </div>
-                  </div>
-                  <span className="text-sm text-muted-foreground capitalize">
-                    {event.priority} priority
-                  </span>
-                </div>
-              ))}
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <Calendar className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="text-lg font-medium mb-2">No events yet</h3>
+              <p className="text-muted-foreground max-w-sm">
+                Start by creating an event or adding friends to plan something together!
+              </p>
             </div>
           </CardContent>
         </Card>
