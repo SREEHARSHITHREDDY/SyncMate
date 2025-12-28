@@ -2,14 +2,16 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Users, Bell, Clock, ArrowRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useFriends } from "@/hooks/useFriends";
-import { useEvents } from "@/hooks/useEvents";
+import { useEvents, EventWithResponse } from "@/hooks/useEvents";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import { EventInviteCard } from "@/components/EventInviteCard";
+import { EventCard } from "@/components/EventCard";
+import { EditEventDialog } from "@/components/EditEventDialog";
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -24,6 +26,7 @@ export default function Dashboard() {
   const { pendingRequests } = useFriends();
   const { events, pendingInvites } = useEvents();
   const { unreadCount } = useNotifications();
+  const [editingEvent, setEditingEvent] = useState<EventWithResponse | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -149,31 +152,11 @@ export default function Dashboard() {
             {upcomingEvents.length > 0 ? (
               <div className="space-y-4">
                 {upcomingEvents.map((event) => (
-                  <div
+                  <EventCard
                     key={event.id}
-                    className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`h-2 w-2 rounded-full ${
-                          event.priority === "low"
-                            ? "bg-priority-low"
-                            : event.priority === "medium"
-                            ? "bg-priority-medium"
-                            : "bg-priority-high"
-                        }`}
-                      />
-                      <div>
-                        <p className="font-medium">{event.title}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatEventDate(event.event_date, event.event_time)}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-sm text-muted-foreground capitalize">
-                      {event.priority} priority
-                    </span>
-                  </div>
+                    event={event}
+                    onEdit={setEditingEvent}
+                  />
                 ))}
               </div>
             ) : (
@@ -217,6 +200,13 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
+
+        {/* Edit Event Dialog */}
+        <EditEventDialog
+          event={editingEvent}
+          open={!!editingEvent}
+          onOpenChange={(open) => !open && setEditingEvent(null)}
+        />
       </div>
     </AppLayout>
   );
