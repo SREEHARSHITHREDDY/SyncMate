@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Get VAPID public key from environment
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || '';
+// VAPID public key for push notifications
+const VAPID_PUBLIC_KEY = 'BOPQULnj95_Y-pVbJD6wOlua4PJ2k7WoTVB2Lr4OLRSvaDTO-rsFv85cEl41FZa3PA7x3y3ZSysHJ_fo-GIgkRM';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
