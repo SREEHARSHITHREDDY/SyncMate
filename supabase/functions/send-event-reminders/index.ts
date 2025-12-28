@@ -162,48 +162,83 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        // Send email using fetch to Resend API
-        try {
-          const emailResponse = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${RESEND_API_KEY}`,
-            },
-            body: JSON.stringify({
-              from: "Event Reminder <onboarding@resend.dev>",
-              to: [user.email],
-              subject: `Reminder: ${event.title} in ${reminderType}`,
-              html: `
-                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h1 style="color: #333;">Event Reminder</h1>
-                  <p>Hi ${user.name}!</p>
-                  <p>This is a friendly reminder that you have an event coming up in <strong>${reminderType}</strong>:</p>
-                  <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <h2 style="margin: 0 0 10px 0; color: #333;">${event.title}</h2>
-                    <p style="margin: 0; color: #666;">
-                      📅 ${new Date(event.event_date).toLocaleDateString("en-US", {
-                        weekday: "long",
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
-                    </p>
-                    <p style="margin: 5px 0 0 0; color: #666;">
-                      🕐 ${event.event_time.slice(0, 5)}
-                    </p>
+        // Send email if enabled
+        if (emailEnabled) {
+          try {
+            const emailResponse = await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${RESEND_API_KEY}`,
+              },
+              body: JSON.stringify({
+                from: "Event Reminder <onboarding@resend.dev>",
+                to: [user.email],
+                subject: `Reminder: ${event.title} in ${reminderType}`,
+                html: `
+                  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h1 style="color: #333;">Event Reminder</h1>
+                    <p>Hi ${user.name}!</p>
+                    <p>This is a friendly reminder that you have an event coming up in <strong>${reminderType}</strong>:</p>
+                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                      <h2 style="margin: 0 0 10px 0; color: #333;">${event.title}</h2>
+                      <p style="margin: 0; color: #666;">
+                        📅 ${new Date(event.event_date).toLocaleDateString("en-US", {
+                          weekday: "long",
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </p>
+                      <p style="margin: 5px 0 0 0; color: #666;">
+                        🕐 ${event.event_time.slice(0, 5)}
+                      </p>
+                    </div>
+                    <p style="color: #666;">Don't forget to be there!</p>
                   </div>
-                  <p style="color: #666;">Don't forget to be there!</p>
-                </div>
-              `,
-            }),
-          });
+                `,
+              }),
+            });
 
-          const result = await emailResponse.json();
-          console.log(`Email sent to ${user.email}:`, result);
-          emailsSent.push(user.email);
-        } catch (emailError) {
-          console.error(`Failed to send email to ${user.email}:`, emailError);
+            const result = await emailResponse.json();
+            console.log(`Email sent to ${user.email}:`, result);
+            emailsSent.push(user.email);
+          } catch (emailError) {
+            console.error(`Failed to send email to ${user.email}:`, emailError);
+          }
+        }
+
+        // Send push notification
+        try {
+          const { data: pushSubs } = await supabase
+            .from("push_subscriptions")
+            .select("*")
+            .eq("user_id", user.userId);
+
+          if (pushSubs && pushSubs.length > 0) {
+            for (const sub of pushSubs) {
+              try {
+                // Simple push notification via native fetch
+                await fetch(sub.endpoint, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'TTL': '86400',
+                  },
+                  body: JSON.stringify({
+                    title: `${event.title} in ${reminderType}`,
+                    body: `Don't forget: ${event.title} on ${new Date(event.event_date).toLocaleDateString()}`,
+                    url: '/dashboard',
+                  }),
+                });
+                console.log(`Push sent to ${user.email}`);
+              } catch (pushError) {
+                console.error(`Push failed for ${user.email}:`, pushError);
+              }
+            }
+          }
+        } catch (pushError) {
+          console.error(`Failed to send push to ${user.email}:`, pushError);
         }
       }
     }
