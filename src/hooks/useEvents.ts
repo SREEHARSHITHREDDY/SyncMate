@@ -10,6 +10,8 @@ export interface Event {
   event_date: string;
   event_time: string;
   priority: "low" | "medium" | "high";
+  recurrence_type: string | null;
+  recurrence_end_date: string | null;
   created_at: string;
 }
 

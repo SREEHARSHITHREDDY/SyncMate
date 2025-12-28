@@ -1,0 +1,203 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+interface EventReminder {
+  event_id: string;
+  event_title: string;
+  event_date: string;
+  event_time: string;
+  user_email: string;
+  user_name: string;
+}
+
+const handler = async (req: Request): Promise<Response> => {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const now = new Date();
+    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+    const oneDayLater = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    // Format dates for comparison
+    const todayStr = now.toISOString().split("T")[0];
+    const tomorrowStr = oneDayLater.toISOString().split("T")[0];
+    
+    // Get current time in HH:MM format
+    const currentHour = now.getHours().toString().padStart(2, "0");
+    const currentMinute = now.getMinutes().toString().padStart(2, "0");
+    const oneHourLaterHour = oneHourLater.getHours().toString().padStart(2, "0");
+    const oneHourLaterMinute = oneHourLater.getMinutes().toString().padStart(2, "0");
+
+    // Get events happening in the next hour (for 1-hour reminder)
+    const { data: hourEvents, error: hourError } = await supabase
+      .from("events")
+      .select(`
+        id,
+        title,
+        event_date,
+        event_time,
+        creator_id
+      `)
+      .eq("event_date", todayStr)
+      .gte("event_time", `${currentHour}:${currentMinute}`)
+      .lte("event_time", `${oneHourLaterHour}:${oneHourLaterMinute}`);
+
+    if (hourError) {
+      console.error("Error fetching hour events:", hourError);
+    }
+
+    // Get events happening tomorrow at this time (for 1-day reminder)
+    const { data: dayEvents, error: dayError } = await supabase
+      .from("events")
+      .select(`
+        id,
+        title,
+        event_date,
+        event_time,
+        creator_id
+      `)
+      .eq("event_date", tomorrowStr)
+      .gte("event_time", `${currentHour}:${currentMinute}`)
+      .lte("event_time", `${oneHourLaterHour}:${oneHourLaterMinute}`);
+
+    if (dayError) {
+      console.error("Error fetching day events:", dayError);
+    }
+
+    const allEvents = [...(hourEvents || []), ...(dayEvents || [])];
+    const emailsSent: string[] = [];
+
+    for (const event of allEvents) {
+      // Get creator's profile
+      const { data: creatorProfile } = await supabase
+        .from("profiles")
+        .select("email, name")
+        .eq("user_id", event.creator_id)
+        .maybeSingle();
+
+      // Get all invitees
+      const { data: responses } = await supabase
+        .from("event_responses")
+        .select("user_id, response")
+        .eq("event_id", event.id)
+        .eq("response", "yes");
+
+      const usersToNotify: { email: string; name: string }[] = [];
+
+      // Add creator
+      if (creatorProfile?.email) {
+        usersToNotify.push({
+          email: creatorProfile.email,
+          name: creatorProfile.name || "there",
+        });
+      }
+
+      // Add accepted invitees
+      if (responses) {
+        for (const response of responses) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("email, name")
+            .eq("user_id", response.user_id)
+            .maybeSingle();
+
+          if (profile?.email) {
+            usersToNotify.push({
+              email: profile.email,
+              name: profile.name || "there",
+            });
+          }
+        }
+      }
+
+      // Determine reminder type
+      const isHourReminder = event.event_date === todayStr;
+      const reminderType = isHourReminder ? "1 hour" : "1 day";
+
+      // Send emails using fetch to Resend API
+      for (const user of usersToNotify) {
+        try {
+          const emailResponse = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${RESEND_API_KEY}`,
+            },
+            body: JSON.stringify({
+              from: "Event Reminder <onboarding@resend.dev>",
+              to: [user.email],
+              subject: `Reminder: ${event.title} in ${reminderType}`,
+              html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h1 style="color: #333;">Event Reminder</h1>
+                  <p>Hi ${user.name}!</p>
+                  <p>This is a friendly reminder that you have an event coming up in <strong>${reminderType}</strong>:</p>
+                  <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h2 style="margin: 0 0 10px 0; color: #333;">${event.title}</h2>
+                    <p style="margin: 0; color: #666;">
+                      📅 ${new Date(event.event_date).toLocaleDateString("en-US", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                    <p style="margin: 5px 0 0 0; color: #666;">
+                      🕐 ${event.event_time.slice(0, 5)}
+                    </p>
+                  </div>
+                  <p style="color: #666;">Don't forget to be there!</p>
+                </div>
+              `,
+            }),
+          });
+
+          const result = await emailResponse.json();
+          console.log(`Email sent to ${user.email}:`, result);
+          emailsSent.push(user.email);
+        } catch (emailError) {
+          console.error(`Failed to send email to ${user.email}:`, emailError);
+        }
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        eventsProcessed: allEvents.length,
+        emailsSent: emailsSent.length,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      }
+    );
+  } catch (error: any) {
+    console.error("Error in send-event-reminders function:", error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      }
+    );
+  }
+};
+
+serve(handler);

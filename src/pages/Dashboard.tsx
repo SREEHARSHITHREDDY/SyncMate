@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Users, Bell, Clock, ArrowRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useFriends } from "@/hooks/useFriends";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
@@ -12,6 +12,7 @@ import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import { EventInviteCard } from "@/components/EventInviteCard";
 import { EventCard } from "@/components/EventCard";
 import { EditEventDialog } from "@/components/EditEventDialog";
+import { PriorityFilter } from "@/components/PriorityFilter";
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const { events, pendingInvites } = useEvents();
   const { unreadCount } = useNotifications();
   const [editingEvent, setEditingEvent] = useState<EventWithResponse | null>(null);
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high">("all");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -36,8 +38,14 @@ export default function Dashboard() {
 
   const userName = user?.user_metadata?.name || "there";
 
+  // Filter events by priority
+  const filteredEvents = useMemo(() => {
+    if (priorityFilter === "all") return events;
+    return events.filter((e) => e.priority === priorityFilter);
+  }, [events, priorityFilter]);
+
   // Get upcoming events for this week
-  const upcomingEvents = events.slice(0, 5);
+  const upcomingEvents = filteredEvents.slice(0, 5);
   const nextEvent = upcomingEvents[0];
 
   const formatEventDate = (dateStr: string, timeStr: string) => {
@@ -136,7 +144,7 @@ export default function Dashboard() {
             <div>
               <CardTitle>Upcoming Plans</CardTitle>
               <CardDescription>
-                {upcomingEvents.length > 0
+              {upcomingEvents.length > 0
                   ? "Looks like you have some plans coming up"
                   : "Your scheduled events will appear here"}
               </CardDescription>
@@ -149,6 +157,9 @@ export default function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
+            <div className="mb-4">
+              <PriorityFilter value={priorityFilter} onChange={setPriorityFilter} />
+            </div>
             {upcomingEvents.length > 0 ? (
               <div className="space-y-4">
                 {upcomingEvents.map((event) => (

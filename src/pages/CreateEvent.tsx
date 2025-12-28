@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RecurrenceSelect, RecurrenceType } from "@/components/RecurrenceSelect";
 
 type Priority = "low" | "medium" | "high";
 
@@ -30,6 +31,8 @@ export default function CreateEvent() {
   const [date, setDate] = useState<Date>();
   const [time, setTime] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("none");
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>();
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -80,6 +83,8 @@ export default function CreateEvent() {
           event_date: format(date, "yyyy-MM-dd"),
           event_time: time,
           priority,
+          recurrence_type: recurrenceType === "none" ? null : recurrenceType,
+          recurrence_end_date: recurrenceEndDate ? format(recurrenceEndDate, "yyyy-MM-dd") : null,
         })
         .select()
         .single();
@@ -230,6 +235,14 @@ export default function CreateEvent() {
                 ))}
               </div>
             </div>
+
+            {/* Recurring Events */}
+            <RecurrenceSelect
+              recurrenceType={recurrenceType}
+              recurrenceEndDate={recurrenceEndDate}
+              onRecurrenceTypeChange={setRecurrenceType}
+              onRecurrenceEndDateChange={setRecurrenceEndDate}
+            />
 
             {/* Invite Friends */}
             <div className="space-y-2">

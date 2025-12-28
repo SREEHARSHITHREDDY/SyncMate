@@ -58,6 +58,8 @@ export type Database = {
           event_time: string
           id: string
           priority: string
+          recurrence_end_date: string | null
+          recurrence_type: string | null
           title: string
           updated_at: string
         }
@@ -69,6 +71,8 @@ export type Database = {
           event_time: string
           id?: string
           priority?: string
+          recurrence_end_date?: string | null
+          recurrence_type?: string | null
           title: string
           updated_at?: string
         }
@@ -80,6 +84,8 @@ export type Database = {
           event_time?: string
           id?: string
           priority?: string
+          recurrence_end_date?: string | null
+          recurrence_type?: string | null
           title?: string
           updated_at?: string
         }
