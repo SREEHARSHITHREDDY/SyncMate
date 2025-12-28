@@ -84,10 +84,14 @@ const handler = async (req: Request): Promise<Response> => {
     const emailsSent: string[] = [];
 
     for (const event of allEvents) {
-      // Get creator's profile
+      // Determine reminder type
+      const isHourReminder = event.event_date === todayStr;
+      const reminderType = isHourReminder ? "1 hour" : "1 day";
+
+      // Get creator's profile and preferences
       const { data: creatorProfile } = await supabase
         .from("profiles")
-        .select("email, name")
+        .select("email, name, user_id")
         .eq("user_id", event.creator_id)
         .maybeSingle();
 
@@ -98,13 +102,14 @@ const handler = async (req: Request): Promise<Response> => {
         .eq("event_id", event.id)
         .eq("response", "yes");
 
-      const usersToNotify: { email: string; name: string }[] = [];
+      const usersToNotify: { email: string; name: string; userId: string }[] = [];
 
       // Add creator
       if (creatorProfile?.email) {
         usersToNotify.push({
           email: creatorProfile.email,
           name: creatorProfile.name || "there",
+          userId: creatorProfile.user_id,
         });
       }
 
@@ -113,7 +118,7 @@ const handler = async (req: Request): Promise<Response> => {
         for (const response of responses) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("email, name")
+            .select("email, name, user_id")
             .eq("user_id", response.user_id)
             .maybeSingle();
 
@@ -121,17 +126,43 @@ const handler = async (req: Request): Promise<Response> => {
             usersToNotify.push({
               email: profile.email,
               name: profile.name || "there",
+              userId: profile.user_id,
             });
           }
         }
       }
 
-      // Determine reminder type
-      const isHourReminder = event.event_date === todayStr;
-      const reminderType = isHourReminder ? "1 hour" : "1 day";
-
-      // Send emails using fetch to Resend API
+      // Filter users based on their notification preferences
       for (const user of usersToNotify) {
+        // Get user's notification preferences
+        const { data: prefs } = await supabase
+          .from("notification_preferences")
+          .select("*")
+          .eq("user_id", user.userId)
+          .maybeSingle();
+
+        // Default: send both reminders if no preferences set
+        const emailEnabled = prefs?.email_enabled ?? true;
+        const remind1Hour = prefs?.remind_1_hour ?? true;
+        const remind1Day = prefs?.remind_1_day ?? true;
+
+        // Skip if email is disabled
+        if (!emailEnabled) {
+          console.log(`Skipping ${user.email}: email notifications disabled`);
+          continue;
+        }
+
+        // Skip based on reminder timing preference
+        if (isHourReminder && !remind1Hour) {
+          console.log(`Skipping ${user.email}: 1-hour reminders disabled`);
+          continue;
+        }
+        if (!isHourReminder && !remind1Day) {
+          console.log(`Skipping ${user.email}: 1-day reminders disabled`);
+          continue;
+        }
+
+        // Send email using fetch to Resend API
         try {
           const emailResponse = await fetch("https://api.resend.com/emails", {
             method: "POST",

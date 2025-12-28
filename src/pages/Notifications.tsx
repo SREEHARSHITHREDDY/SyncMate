@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotifications } from "@/hooks/useNotifications";
 import { formatDistanceToNow } from "date-fns";
+import { NotificationPreferencesCard } from "@/components/NotificationPreferencesCard";
 
 const getIcon = (type: string) => {
   switch (type) {
@@ -128,6 +129,11 @@ export default function Notifications() {
             )}
           </CardContent>
         </Card>
+
+        {/* Notification Preferences */}
+        <div className="mt-6 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+          <NotificationPreferencesCard />
+        </div>
       </div>
     </AppLayout>
   );
