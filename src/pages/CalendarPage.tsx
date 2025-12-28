@@ -1,12 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Calendar, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
+import { useEventExceptions } from "@/hooks/useEventExceptions";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, parseISO, isToday } from "date-fns";
 import {
   Tooltip,
@@ -14,8 +14,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PriorityFilter } from "@/components/PriorityFilter";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+interface EventException {
+  id: string;
+  event_id: string;
+  exception_date: string;
+}
 
 export default function CalendarPage() {
   const { user, loading } = useAuth();
@@ -23,6 +31,26 @@ export default function CalendarPage() {
   const { events } = useEvents();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high">("all");
+
+  // Fetch all exceptions for the user's events
+  const { data: allExceptions = [] } = useQuery({
+    queryKey: ["all-event-exceptions", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const eventIds = events.map(e => e.id);
+      if (eventIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from("event_exceptions")
+        .select("*")
+        .in("event_id", eventIds);
+      
+      if (error) throw error;
+      return data as EventException[];
+    },
+    enabled: !!user && events.length > 0,
+  });
 
   // Filter events by priority
   const filteredEvents = useMemo(() => {
@@ -44,11 +72,18 @@ export default function CalendarPage() {
 
   const firstDayOfWeek = calendarDays[0]?.getDay() || 0;
 
-  const getEventsForDay = (day: Date): EventWithResponse[] => {
-    return filteredEvents.filter((event) => {
-      const eventDate = parseISO(event.event_date);
-      return isSameDay(eventDate, day);
-    });
+  const getEventsForDay = (day: Date): (EventWithResponse & { isCancelled?: boolean })[] => {
+    return filteredEvents
+      .filter((event) => {
+        const eventDate = parseISO(event.event_date);
+        return isSameDay(eventDate, day);
+      })
+      .map((event) => {
+        const isCancelled = allExceptions.some(
+          ex => ex.event_id === event.id && ex.exception_date === event.event_date
+        );
+        return { ...event, isCancelled };
+      });
   };
 
   const getPriorityColor = (priority: string) => {
@@ -63,11 +98,18 @@ export default function CalendarPage() {
   };
 
   const monthEvents = useMemo(() => {
-    return filteredEvents.filter((event) => {
-      const eventDate = parseISO(event.event_date);
-      return isSameMonth(eventDate, currentMonth);
-    });
-  }, [filteredEvents, currentMonth]);
+    return filteredEvents
+      .filter((event) => {
+        const eventDate = parseISO(event.event_date);
+        return isSameMonth(eventDate, currentMonth);
+      })
+      .map((event) => {
+        const isCancelled = allExceptions.some(
+          ex => ex.event_id === event.id && ex.exception_date === event.event_date
+        );
+        return { ...event, isCancelled };
+      });
+  }, [filteredEvents, currentMonth, allExceptions]);
 
   const goToPrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const goToNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -154,7 +196,9 @@ export default function CalendarPage() {
                                 {dayEvents.slice(0, 3).map((event) => (
                                   <div
                                     key={event.id}
-                                    className={`h-1.5 w-1.5 rounded-full ${getPriorityColor(event.priority)}`}
+                                    className={`h-1.5 w-1.5 rounded-full ${getPriorityColor(event.priority)} ${
+                                      event.isCancelled || (event as any).is_completed ? "opacity-40" : ""
+                                    }`}
                                   />
                                 ))}
                                 {dayEvents.length > 3 && (
@@ -168,13 +212,20 @@ export default function CalendarPage() {
                       {dayEvents.length > 0 && (
                         <TooltipContent side="bottom" className="max-w-xs">
                           <div className="space-y-1">
-                            {dayEvents.map((event) => (
-                              <div key={event.id} className="flex items-center gap-2">
-                                <div className={`h-2 w-2 rounded-full ${getPriorityColor(event.priority)}`} />
-                                <span className="text-sm">{event.title}</span>
-                                <span className="text-xs text-muted-foreground">{event.event_time.slice(0, 5)}</span>
-                              </div>
-                            ))}
+                            {dayEvents.map((event) => {
+                              const isStrikethrough = event.isCancelled || (event as any).is_completed;
+                              return (
+                                <div key={event.id} className="flex items-center gap-2">
+                                  <div className={`h-2 w-2 rounded-full ${getPriorityColor(event.priority)} ${isStrikethrough ? "opacity-40" : ""}`} />
+                                  <span className={`text-sm ${isStrikethrough ? "line-through text-muted-foreground" : ""}`}>
+                                    {event.title}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">{event.event_time.slice(0, 5)}</span>
+                                  {event.isCancelled && <span className="text-xs text-destructive">(Cancelled)</span>}
+                                  {(event as any).is_completed && !event.isCancelled && <span className="text-xs text-muted-foreground">(Done)</span>}
+                                </div>
+                              );
+                            })}
                           </div>
                         </TooltipContent>
                       )}
@@ -184,7 +235,7 @@ export default function CalendarPage() {
               </div>
 
               {/* Legend */}
-              <div className="mt-6 pt-4 border-t border-border flex items-center gap-6 justify-center">
+              <div className="mt-6 pt-4 border-t border-border flex items-center gap-6 justify-center flex-wrap">
                 <div className="flex items-center gap-2">
                   <div className="h-2.5 w-2.5 rounded-full bg-priority-low" />
                   <span className="text-sm text-muted-foreground">Low</span>
@@ -196,6 +247,10 @@ export default function CalendarPage() {
                 <div className="flex items-center gap-2">
                   <div className="h-2.5 w-2.5 rounded-full bg-priority-high" />
                   <span className="text-sm text-muted-foreground">High</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40" />
+                  <span className="text-sm text-muted-foreground line-through">Completed/Cancelled</span>
                 </div>
               </div>
             </CardContent>
@@ -209,20 +264,33 @@ export default function CalendarPage() {
             <CardContent>
               {monthEvents.length > 0 ? (
                 <div className="space-y-3">
-                  {monthEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-                    >
-                      <div className={`h-2 w-2 rounded-full mt-1.5 ${getPriorityColor(event.priority)}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{event.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(parseISO(event.event_date), "EEE, MMM d")} at {event.event_time.slice(0, 5)}
-                        </p>
+                  {monthEvents.map((event) => {
+                    const isStrikethrough = event.isCancelled || (event as any).is_completed;
+                    return (
+                      <div
+                        key={event.id}
+                        className={`flex items-start gap-3 p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors ${
+                          isStrikethrough ? "opacity-60" : ""
+                        }`}
+                      >
+                        <div className={`h-2 w-2 rounded-full mt-1.5 ${getPriorityColor(event.priority)}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-medium text-sm truncate ${isStrikethrough ? "line-through text-muted-foreground" : ""}`}>
+                            {event.title}
+                          </p>
+                          <p className={`text-xs ${isStrikethrough ? "line-through text-muted-foreground/70" : "text-muted-foreground"}`}>
+                            {format(parseISO(event.event_date), "EEE, MMM d")} at {event.event_time.slice(0, 5)}
+                          </p>
+                          {event.isCancelled && (
+                            <span className="text-xs text-destructive">Cancelled</span>
+                          )}
+                          {(event as any).is_completed && !event.isCancelled && (
+                            <span className="text-xs text-muted-foreground">Completed</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-center">

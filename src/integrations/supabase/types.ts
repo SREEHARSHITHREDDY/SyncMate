@@ -86,6 +86,7 @@ export type Database = {
           event_date: string
           event_time: string
           id: string
+          is_completed: boolean
           priority: string
           recurrence_end_date: string | null
           recurrence_type: string | null
@@ -99,6 +100,7 @@ export type Database = {
           event_date: string
           event_time: string
           id?: string
+          is_completed?: boolean
           priority?: string
           recurrence_end_date?: string | null
           recurrence_type?: string | null
@@ -112,6 +114,7 @@ export type Database = {
           event_date?: string
           event_time?: string
           id?: string
+          is_completed?: boolean
           priority?: string
           recurrence_end_date?: string | null
           recurrence_type?: string | null
