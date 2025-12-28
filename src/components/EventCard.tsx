@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Calendar, 
   Clock, 
@@ -51,9 +52,10 @@ interface EventCardProps {
   onEdit?: (event: EventWithResponse) => void;
   onCancelOccurrence?: (event: EventWithResponse) => void;
   showActions?: boolean;
+  isCancelled?: boolean;
 }
 
-export function EventCard({ event, onEdit, onCancelOccurrence, showActions = true }: EventCardProps) {
+export function EventCard({ event, onEdit, onCancelOccurrence, showActions = true, isCancelled = false }: EventCardProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -61,6 +63,32 @@ export function EventCard({ event, onEdit, onCancelOccurrence, showActions = tru
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
+  const [isTogglingComplete, setIsTogglingComplete] = useState(false);
+
+  const isCompleted = (event as any).is_completed || false;
+  const isStrikethrough = isCancelled || isCompleted;
+
+  const handleToggleComplete = async () => {
+    if (!user || !event.isCreator) return;
+    setIsTogglingComplete(true);
+
+    try {
+      const { error } = await supabase
+        .from("events")
+        .update({ is_completed: !isCompleted })
+        .eq("id", event.id)
+        .eq("creator_id", user.id);
+
+      if (error) throw error;
+
+      toast.success(isCompleted ? "Event marked as incomplete" : "Event marked as completed");
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update event");
+    } finally {
+      setIsTogglingComplete(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!user) return;
@@ -153,14 +181,45 @@ export function EventCard({ event, onEdit, onCancelOccurrence, showActions = tru
   };
 
   return (
-    <Card className="overflow-hidden transition-all hover:shadow-md">
+    <Card className={`overflow-hidden transition-all hover:shadow-md ${isStrikethrough ? "opacity-60" : ""}`}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 flex-1 min-w-0">
+            {/* Completion checkbox */}
+            {event.isCreator && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="mt-1">
+                    <Checkbox
+                      checked={isCompleted}
+                      onCheckedChange={handleToggleComplete}
+                      disabled={isTogglingComplete}
+                      className="h-5 w-5"
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isCompleted ? "Mark as incomplete" : "Mark as completed"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            
             <div className={`h-2 w-2 rounded-full mt-2 shrink-0 ${getPriorityColor(event.priority)}`} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <h4 className="font-medium truncate">{event.title}</h4>
+                <h4 className={`font-medium truncate ${isStrikethrough ? "line-through text-muted-foreground" : ""}`}>
+                  {event.title}
+                </h4>
+                {isCancelled && (
+                  <Badge variant="destructive" className="text-xs shrink-0">
+                    Cancelled
+                  </Badge>
+                )}
+                {isCompleted && !isCancelled && (
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    Completed
+                  </Badge>
+                )}
                 {(event as any).recurrence_type && (
                   <Badge variant="secondary" className="gap-1 text-xs shrink-0">
                     <Repeat className="h-3 w-3" />
@@ -168,18 +227,18 @@ export function EventCard({ event, onEdit, onCancelOccurrence, showActions = tru
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1 flex-wrap">
-                <span className="flex items-center gap-1">
+              <div className={`flex items-center gap-3 text-sm mt-1 flex-wrap ${isStrikethrough ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
+                <span className={`flex items-center gap-1 ${isStrikethrough ? "line-through" : ""}`}>
                   <Calendar className="h-3 w-3" />
                   {format(parseISO(event.event_date), "MMM d, yyyy")}
                 </span>
-                <span className="flex items-center gap-1">
+                <span className={`flex items-center gap-1 ${isStrikethrough ? "line-through" : ""}`}>
                   <Clock className="h-3 w-3" />
                   {event.event_time.slice(0, 5)}
                 </span>
               </div>
               {event.description && (
-                <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                <p className={`text-sm mt-2 line-clamp-2 ${isStrikethrough ? "line-through text-muted-foreground/70" : "text-muted-foreground"}`}>
                   {event.description}
                 </p>
               )}

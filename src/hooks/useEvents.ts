@@ -13,6 +13,7 @@ export interface Event {
   recurrence_type: string | null;
   recurrence_end_date: string | null;
   created_at: string;
+  is_completed: boolean;
 }
 
 export interface EventWithResponse extends Event {
