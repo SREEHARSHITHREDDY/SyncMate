@@ -12,6 +12,16 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// HTML escape function to prevent XSS in email templates
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 interface EventReminder {
   event_id: string;
   event_title: string;
@@ -174,14 +184,14 @@ const handler = async (req: Request): Promise<Response> => {
               body: JSON.stringify({
                 from: "Event Reminder <onboarding@resend.dev>",
                 to: [user.email],
-                subject: `Reminder: ${event.title} in ${reminderType}`,
+                subject: `Reminder: ${escapeHtml(event.title)} in ${reminderType}`,
                 html: `
                   <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                     <h1 style="color: #333;">Event Reminder</h1>
-                    <p>Hi ${user.name}!</p>
+                    <p>Hi ${escapeHtml(user.name)}!</p>
                     <p>This is a friendly reminder that you have an event coming up in <strong>${reminderType}</strong>:</p>
                     <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                      <h2 style="margin: 0 0 10px 0; color: #333;">${event.title}</h2>
+                      <h2 style="margin: 0 0 10px 0; color: #333;">${escapeHtml(event.title)}</h2>
                       <p style="margin: 0; color: #666;">
                         📅 ${new Date(event.event_date).toLocaleDateString("en-US", {
                           weekday: "long",
