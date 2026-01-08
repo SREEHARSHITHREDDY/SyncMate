@@ -272,10 +272,34 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      profiles_search: {
+        Row: {
+          email_hint: string | null
+          full_email: string | null
+          name: string | null
+          user_id: string | null
+        }
+        Insert: {
+          email_hint?: never
+          full_email?: string | null
+          name?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          email_hint?: never
+          full_email?: string | null
+          name?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      has_pending_request_from: {
+        Args: { target_user_id: string }
+        Returns: boolean
+      }
+      is_friend_with: { Args: { target_user_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
