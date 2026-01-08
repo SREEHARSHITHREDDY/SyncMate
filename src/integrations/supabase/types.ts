@@ -272,27 +272,7 @@ export type Database = {
       }
     }
     Views: {
-      profiles_search: {
-        Row: {
-          email_hint: string | null
-          full_email: string | null
-          name: string | null
-          user_id: string | null
-        }
-        Insert: {
-          email_hint?: never
-          full_email?: string | null
-          name?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          email_hint?: never
-          full_email?: string | null
-          name?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       has_pending_request_from: {
@@ -300,6 +280,14 @@ export type Database = {
         Returns: boolean
       }
       is_friend_with: { Args: { target_user_id: string }; Returns: boolean }
+      search_profiles_by_email: {
+        Args: { search_query: string }
+        Returns: {
+          email_hint: string
+          name: string
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
