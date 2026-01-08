@@ -110,15 +110,7 @@ export function useFriends() {
       });
 
       if (error) throw error;
-
-      // Create notification for receiver
-      await supabase.from("notifications").insert({
-        user_id: receiverId,
-        type: "friend_request",
-        title: "New friend request",
-        message: `Someone wants to connect with you`,
-        reference_id: user.id,
-      });
+      // Notification is automatically created by database trigger
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["friends"] });
@@ -157,19 +149,24 @@ export function useFriends() {
     },
   });
 
-  // Search users by email
-  const searchUsers = async (query: string) => {
+  // Search users by email using secure RPC function (returns masked emails)
+  const searchUsers = async (query: string): Promise<Profile[]> => {
     if (!user || !query.trim()) return [];
 
     const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .neq("user_id", user.id)
-      .ilike("email", `%${query}%`)
-      .limit(10);
+      .rpc("search_profiles_by_email", { search_query: query });
 
     if (error) throw error;
-    return data as Profile[];
+    
+    // Map the RPC response to Profile format (with masked email)
+    return (data || []).map((item: { user_id: string; name: string; email_hint: string }) => ({
+      id: item.user_id,
+      user_id: item.user_id,
+      name: item.name,
+      email: item.email_hint, // This is the masked email (e.g., "jo***@example.com")
+      avatar_url: null,
+      created_at: "",
+    }));
   };
 
   return {

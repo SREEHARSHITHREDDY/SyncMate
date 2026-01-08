@@ -104,17 +104,7 @@ export default function CreateEvent() {
           .insert(responses);
 
         if (responsesError) throw responsesError;
-
-        // Create notifications for invited friends
-        const notifications = selectedFriends.map((friendId) => ({
-          user_id: friendId,
-          type: "event_invite",
-          title: "Event Invitation",
-          message: `${user.user_metadata?.name || "Someone"} invited you to "${title}"`,
-          reference_id: event.id,
-        }));
-
-        await supabase.from("notifications").insert(notifications);
+        // Notifications are automatically created by database trigger
       }
 
       toast.success("Event created successfully!");
