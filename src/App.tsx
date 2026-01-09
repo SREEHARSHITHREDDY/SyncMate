@@ -13,6 +13,8 @@ import CreateEvent from "./pages/CreateEvent";
 import CalendarPage from "./pages/CalendarPage";
 import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
+import Profile from "./pages/Profile";
+import Templates from "./pages/Templates";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +36,8 @@ const App = () => (
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/templates" element={<Templates />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </RealtimeProvider>
