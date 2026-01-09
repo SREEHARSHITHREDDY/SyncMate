@@ -272,6 +272,112 @@ Return the IDs of relevant events with a brief explanation of why each is releva
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
 
+    } else if (action === "suggest_time") {
+      // Suggest optimal meeting times based on schedule
+      const currentDate = new Date().toISOString().split("T")[0];
+      const currentDayOfWeek = new Date().toLocaleDateString("en-US", { weekday: "long" });
+      
+      const eventsSummary = events?.map((e: any) => ({
+        title: e.title,
+        date: e.event_date,
+        time: e.event_time,
+        priority: e.priority,
+        isCompleted: e.is_completed
+      })).filter((e: any) => !e.isCompleted) || [];
+
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "system",
+              content: `You are an AI scheduling assistant. Analyze the user's existing events and suggest optimal times for a new meeting or event.
+
+Today's date is ${currentDate} (${currentDayOfWeek}).
+
+Current scheduled events (not completed):
+${JSON.stringify(eventsSummary, null, 2)}
+
+Consider:
+- Avoid times that conflict with existing events
+- Prefer business hours (9 AM - 6 PM) unless specified otherwise
+- Allow buffer time between meetings (at least 30 minutes)
+- Consider the user's apparent schedule patterns
+- Suggest times within the next 7 days unless otherwise specified
+- Return dates in YYYY-MM-DD format and times in HH:MM format`,
+            },
+            { role: "user", content: message }
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "suggest_times",
+                description: "Suggest optimal meeting times",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    suggestions: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          time: { type: "string", description: "Suggested time slot (e.g., 'Tuesday, Jan 14 at 2:00 PM')" },
+                          reason: { type: "string", description: "Why this time is good" }
+                        },
+                        required: ["time", "reason"]
+                      },
+                      description: "List of 3-5 suggested time slots"
+                    }
+                  },
+                  required: ["suggestions"],
+                  additionalProperties: false
+                }
+              }
+            }
+          ],
+          tool_choice: { type: "function", function: { name: "suggest_times" } }
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          return new Response(
+            JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+            { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          );
+        }
+        if (response.status === 402) {
+          return new Response(
+            JSON.stringify({ error: "AI credits exhausted. Please add more credits." }),
+            { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          );
+        }
+        throw new Error("Failed to suggest times");
+      }
+
+      const data = await response.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      
+      if (!toolCall?.function?.arguments) {
+        return new Response(
+          JSON.stringify({ success: true, suggestions: [] }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      const suggestions = JSON.parse(toolCall.function.arguments);
+
+      return new Response(
+        JSON.stringify({ success: true, suggestions: suggestions.suggestions }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+
     } else if (action === "chat") {
       // General chat about events
       const eventsSummary = events?.map((e: any) => ({

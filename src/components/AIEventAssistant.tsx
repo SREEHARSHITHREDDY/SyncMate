@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Loader2, Sparkles, X, Calendar, Check } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Clock } from "lucide-react";
 import { useAIEventAssistant } from "@/hooks/useAIEventAssistant";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,61 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const [creatingEvent, setCreatingEvent] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<typeof window.SpeechRecognition.prototype | null>(null);
+
+  // Check for Web Speech API support
+  const speechSupported = typeof window !== 'undefined' && 
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (!speechSupported) return;
+
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join('');
+      setInput(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'not-allowed') {
+        toast.error('Microphone access denied. Please enable it in your browser settings.');
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      recognition.abort();
+    };
+  }, [speechSupported]);
+
+  const toggleListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      setInput('');
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  }, [isListening]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -122,6 +177,12 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
                   onClick={() => sendMessage("What's my schedule looking like?")}
                 >
                   "What's my schedule looking like?"
+                </button>
+                <button
+                  className="block w-full text-left text-xs bg-secondary/50 hover:bg-secondary px-3 py-2 rounded-lg transition-colors"
+                  onClick={() => sendMessage("Suggest a good time for a 1-hour team meeting this week")}
+                >
+                  "Suggest a good time for a meeting this week"
                 </button>
               </div>
             </div>
@@ -228,10 +289,22 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Schedule a meeting, search events..."
+            placeholder={isListening ? "Listening..." : "Schedule a meeting, search events..."}
             className="flex-1"
             disabled={isLoading}
           />
+          {speechSupported && (
+            <Button
+              type="button"
+              size="icon"
+              variant={isListening ? "destructive" : "outline"}
+              onClick={toggleListening}
+              disabled={isLoading}
+              className={isListening ? "animate-pulse" : ""}
+            >
+              {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+          )}
           <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
