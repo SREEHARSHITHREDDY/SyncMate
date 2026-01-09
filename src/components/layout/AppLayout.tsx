@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { Navbar } from "./Navbar";
+import { AIAssistantButton } from "@/components/AIAssistantButton";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -12,6 +13,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <main className="animate-fade-in">
         {children}
       </main>
+      <AIAssistantButton />
     </div>
   );
 }

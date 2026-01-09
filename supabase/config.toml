@@ -1,1 +1,10 @@
 project_id = "mtcvhlgiitzaxsmgbzqk"
+
+[functions.send-event-reminders]
+verify_jwt = false
+
+[functions.send-push-notification]
+verify_jwt = false
+
+[functions.ai-event-assistant]
+verify_jwt = false
