@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Clock } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import { useAIEventAssistant } from "@/hooks/useAIEventAssistant";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,7 +27,9 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const queryClient = useQueryClient();
   const [creatingEvent, setCreatingEvent] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const recognitionRef = useRef<typeof window.SpeechRecognition.prototype | null>(null);
+  const { speak, stop, isSpeaking, isSupported: ttsSupported } = useTextToSpeech();
 
   // Check for Web Speech API support
   const speechSupported = typeof window !== 'undefined' && 
@@ -81,11 +84,22 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     }
   }, [isListening]);
 
+  // Auto-scroll when messages change
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Auto-speak new assistant messages
+  useEffect(() => {
+    if (messages.length > 0 && voiceEnabled && ttsSupported) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === "assistant" && !isLoading) {
+        speak(lastMessage.content);
+      }
+    }
+  }, [messages, voiceEnabled, ttsSupported, speak, isLoading]);
 
   useEffect(() => {
     if (open && inputRef.current) {
@@ -147,9 +161,29 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
           </div>
           AI Event Assistant
         </CardTitle>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {ttsSupported && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (isSpeaking) stop();
+                setVoiceEnabled(!voiceEnabled);
+              }}
+              title={voiceEnabled ? "Disable voice output" : "Enable voice output"}
+            >
+              {voiceEnabled ? (
+                <Volume2 className={cn("h-4 w-4", isSpeaking && "text-primary animate-pulse")} />
+              ) : (
+                <VolumeX className="h-4 w-4 text-muted-foreground" />
+              )}
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>

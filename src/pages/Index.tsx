@@ -1,8 +1,10 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, Clock, ArrowRight, Check, Sparkles } from "lucide-react";
+import { Calendar, Users, Clock, ArrowRight, Check, Sparkles, Play } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { GuidedDemoTour } from "@/components/GuidedDemoTour";
 import heroIllustration from "@/assets/hero-illustration.png";
 
 const features = [
@@ -25,8 +27,21 @@ const features = [
 
 export default function Index() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [showDemo, setShowDemo] = useState(false);
+
+  const handleDemoComplete = () => {
+    setShowDemo(false);
+    navigate("/auth");
+  };
 
   return (
+    <>
+      <GuidedDemoTour 
+        open={showDemo} 
+        onClose={() => setShowDemo(false)} 
+        onComplete={handleDemoComplete}
+      />
     <AppLayout>
       {/* Hero Section */}
       <section className="relative overflow-hidden">
@@ -94,11 +109,15 @@ export default function Index() {
                         <ArrowRight className="h-4 w-4" />
                       </Button>
                     </Link>
-                    <Link to="/dashboard">
-                      <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                        View Demo
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="outline" 
+                      size="lg" 
+                      className="w-full sm:w-auto gap-2"
+                      onClick={() => setShowDemo(true)}
+                    >
+                      <Play className="h-4 w-4" />
+                      View Demo
+                    </Button>
                   </>
                 )}
               </div>
@@ -237,5 +256,6 @@ export default function Index() {
         </div>
       </footer>
     </AppLayout>
+    </>
   );
 }
