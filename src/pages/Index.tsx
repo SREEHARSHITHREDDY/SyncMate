@@ -242,8 +242,8 @@ export default function Index() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border/50 py-8">
-        <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
+      <footer className="border-t border-border/50 py-8 mt-auto">
+        <div className="container flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
               <Calendar className="h-4 w-4" />
