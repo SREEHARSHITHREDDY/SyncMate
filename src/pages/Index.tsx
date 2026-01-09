@@ -29,7 +29,7 @@ const features = [
 
 export default function Index() {
   const { user } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [showDemo, setShowDemo] = useState(false);
 
@@ -247,26 +247,23 @@ export default function Index() {
       {/* Footer */}
       <footer className="border-t border-border/50 py-8 mt-auto">
         <div className="container flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
-              <Calendar className="h-4 w-4" />
-            </div>
-            <span className="font-semibold">SyncMates</span>
-          </div>
           <div className="flex items-center gap-4">
-            <p className="text-sm text-muted-foreground">
-              © 2024 SyncMates. Made with ♥ for better planning.
-            </p>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
+                <Calendar className="h-4 w-4" />
+              </div>
+              <span className="font-semibold">SyncMates</span>
+            </div>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
                     className="h-8 w-8"
                   >
-                    {theme === 'dark' ? (
+                    {resolvedTheme === 'dark' ? (
                       <Sun className="h-4 w-4" />
                     ) : (
                       <Moon className="h-4 w-4" />
@@ -274,11 +271,14 @@ export default function Index() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}</p>
+                  <p>{resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
+          <p className="text-sm text-muted-foreground">
+            © 2024 SyncMates. Made with ♥ for better planning.
+          </p>
         </div>
       </footer>
     </AppLayout>
