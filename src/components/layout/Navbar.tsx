@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Calendar, Users, Bell, Plus, LayoutDashboard, LogIn, LogOut, Menu, X } from "lucide-react";
+import { Calendar, Users, Bell, Plus, LayoutDashboard, LogIn, LogOut, Menu, X, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,6 +10,7 @@ const navItems = [
   { href: "/friends", label: "Friends", icon: Users },
   { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Navbar() {

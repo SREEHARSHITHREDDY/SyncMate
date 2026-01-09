@@ -22,11 +22,19 @@ interface SearchResult {
   relevanceReason: string;
 }
 
+interface TimeSuggestion {
+  time: string;
+  date: string;
+  dateFormatted: string;
+  reason: string;
+}
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   parsedEvent?: ParsedEvent;
   searchResults?: SearchResult[];
+  timeSuggestions?: TimeSuggestion[];
 }
 
 export function useAIEventAssistant() {
@@ -129,15 +137,23 @@ export function useAIEventAssistant() {
           },
         ]);
       } else if (action === "suggest_time" && data.suggestions) {
-        // Time suggestions
-        const suggestionsText = data.suggestions
-          .map((s: { time: string; reason: string }, i: number) => `${i + 1}. **${s.time}**\n   _${s.reason}_`)
+        // Time suggestions with clickable slots
+        const suggestions: TimeSuggestion[] = data.suggestions.map((s: any) => ({
+          time: s.time,
+          date: s.date || new Date().toISOString().split('T')[0],
+          dateFormatted: s.dateFormatted || s.time.split(' ')[0] || 'Today',
+          reason: s.reason,
+        }));
+        
+        const suggestionsText = suggestions
+          .map((s, i) => `${i + 1}. **${s.time}**\n   _${s.reason}_`)
           .join("\n\n");
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-            content: `Based on your schedule, here are the best times:\n\n${suggestionsText}\n\nWant me to schedule something at one of these times?`,
+            content: `Based on your schedule, here are the best times:\n\n${suggestionsText}\n\nClick any slot below to create an event:`,
+            timeSuggestions: suggestions,
           },
         ]);
       } else if (action === "search" && data.results) {
