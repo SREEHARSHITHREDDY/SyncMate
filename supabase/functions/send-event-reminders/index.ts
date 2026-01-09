@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+const CRON_SECRET = Deno.env.get("CRON_SECRET");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +36,18 @@ const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Verify cron secret for authentication
+  const authHeader = req.headers.get("authorization");
+  const providedSecret = authHeader?.replace("Bearer ", "");
+
+  if (!CRON_SECRET || !providedSecret || providedSecret !== CRON_SECRET) {
+    console.error("Unauthorized: Invalid or missing cron secret");
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
   }
 
   try {
