@@ -150,11 +150,19 @@ export function useFriends() {
   });
 
   // Search users by email using secure RPC function (returns masked emails)
+  // Requires exact email match for security - validates email format client-side
   const searchUsers = async (query: string): Promise<Profile[]> => {
     if (!user || !query.trim()) return [];
 
+    // Validate email format before sending to server
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(query.trim())) {
+      // Return empty array for invalid email format - user needs to enter complete email
+      return [];
+    }
+
     const { data, error } = await supabase
-      .rpc("search_profiles_by_email", { search_query: query });
+      .rpc("search_profiles_by_email", { search_query: query.trim().toLowerCase() });
 
     if (error) throw error;
     
