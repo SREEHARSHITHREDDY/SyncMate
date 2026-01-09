@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX, Clock, Plus } from "lucide-react";
 import { useAIEventAssistant } from "@/hooks/useAIEventAssistant";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { cn } from "@/lib/utils";
@@ -150,6 +150,52 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     }
   };
 
+  const handleCreateFromTimeSuggestion = async (suggestion: { time: string; date: string }) => {
+    if (!user) return;
+    
+    // Extract time from the suggestion (format: "Tuesday, Jan 14 at 2:00 PM" or similar)
+    const timeMatch = suggestion.time.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)?/i);
+    let eventTime = "09:00";
+    
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] || "00";
+      const meridiem = timeMatch[3]?.toUpperCase();
+      
+      if (meridiem === "PM" && hours < 12) hours += 12;
+      if (meridiem === "AM" && hours === 12) hours = 0;
+      
+      eventTime = `${hours.toString().padStart(2, "0")}:${minutes}`;
+    }
+
+    // Use the date from suggestion or calculate from the day name
+    let eventDate = suggestion.date;
+    if (!eventDate || eventDate === "undefined") {
+      // Try to parse from the time string (e.g., "Tuesday, Jan 14")
+      const today = new Date();
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const dayMatch = suggestion.time.match(new RegExp(dayNames.join("|"), "i"));
+      
+      if (dayMatch) {
+        const targetDay = dayNames.findIndex(d => d.toLowerCase() === dayMatch[0].toLowerCase());
+        const currentDay = today.getDay();
+        let daysUntil = targetDay - currentDay;
+        if (daysUntil <= 0) daysUntil += 7;
+        
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + daysUntil);
+        eventDate = targetDate.toISOString().split('T')[0];
+      } else {
+        eventDate = today.toISOString().split('T')[0];
+      }
+    }
+
+    // Prompt user for event title
+    setInput(`Schedule [event name] for ${suggestion.time}`);
+    inputRef.current?.focus();
+    toast.info("Enter an event name to create the event!");
+  };
+
   if (!open) return null;
 
   return (
@@ -293,6 +339,28 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
                           </p>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Time Suggestions with Quick Create */}
+                {message.timeSuggestions && message.timeSuggestions.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {message.timeSuggestions.map((suggestion, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleCreateFromTimeSuggestion(suggestion)}
+                        className="flex items-center justify-between w-full p-2 rounded-lg bg-background/50 hover:bg-primary/10 text-xs transition-colors group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="font-medium">{suggestion.time}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Plus className="h-3 w-3" />
+                          <span>Create</span>
+                        </div>
+                      </button>
                     ))}
                   </div>
                 )}
