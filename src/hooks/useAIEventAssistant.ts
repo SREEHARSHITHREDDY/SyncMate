@@ -68,13 +68,22 @@ export function useAIEventAssistant() {
       const isSearchIntent =
         lowerMessage.includes("find") ||
         lowerMessage.includes("search") ||
-        lowerMessage.includes("what") ||
         lowerMessage.includes("show me") ||
         lowerMessage.includes("when is") ||
         lowerMessage.includes("do i have");
 
+      const isSuggestTimeIntent =
+        lowerMessage.includes("suggest") ||
+        lowerMessage.includes("best time") ||
+        lowerMessage.includes("good time") ||
+        lowerMessage.includes("optimal time") ||
+        lowerMessage.includes("when should") ||
+        lowerMessage.includes("free slot") ||
+        lowerMessage.includes("available time");
+
       let action = "chat";
-      if (isScheduleIntent) action = "parse";
+      if (isScheduleIntent && !isSuggestTimeIntent) action = "parse";
+      else if (isSuggestTimeIntent) action = "suggest_time";
       else if (isSearchIntent) action = "search";
 
       const response = await fetch(
@@ -117,6 +126,18 @@ export function useAIEventAssistant() {
             role: "assistant",
             content: `I understood that! Here's what I parsed:\n\n📅 **${event.title}**\n📆 ${event.date} at ${event.time}\n🎯 Priority: ${event.priority}${event.description ? `\n📝 ${event.description}` : ""}${event.invitees?.length ? `\n👥 Invite: ${event.invitees.join(", ")}` : ""}\n\nWould you like me to create this event?`,
             parsedEvent: event,
+          },
+        ]);
+      } else if (action === "suggest_time" && data.suggestions) {
+        // Time suggestions
+        const suggestionsText = data.suggestions
+          .map((s: { time: string; reason: string }, i: number) => `${i + 1}. **${s.time}**\n   _${s.reason}_`)
+          .join("\n\n");
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `Based on your schedule, here are the best times:\n\n${suggestionsText}\n\nWant me to schedule something at one of these times?`,
           },
         ]);
       } else if (action === "search" && data.results) {
