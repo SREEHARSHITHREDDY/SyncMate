@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, Clock, ArrowRight, Check, Sparkles, Play } from "lucide-react";
+import { Calendar, Users, Clock, ArrowRight, Check, Sparkles, Play, Moon, Sun } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/contexts/AuthContext";
 import { GuidedDemoTour } from "@/components/GuidedDemoTour";
 import heroIllustration from "@/assets/hero-illustration.png";
@@ -27,6 +28,7 @@ const features = [
 
 export default function Index() {
   const { user } = useAuth();
+  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [showDemo, setShowDemo] = useState(false);
 
@@ -250,9 +252,23 @@ export default function Index() {
             </div>
             <span className="font-semibold">SyncMates</span>
           </div>
-          <p className="text-sm text-muted-foreground">
-            © 2024 SyncMates. Made with ♥ for better planning.
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-muted-foreground">
+              © 2024 SyncMates. Made with ♥ for better planning.
+            </p>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="h-8 w-8"
+            >
+              {theme === 'dark' ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </footer>
     </AppLayout>
