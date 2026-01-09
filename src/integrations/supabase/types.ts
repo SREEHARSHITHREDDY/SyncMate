@@ -78,6 +78,45 @@ export type Database = {
           },
         ]
       }
+      event_templates: {
+        Row: {
+          created_at: string
+          default_time: string
+          description: string | null
+          id: string
+          name: string
+          priority: string
+          recurrence_type: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          default_time?: string
+          description?: string | null
+          id?: string
+          name: string
+          priority?: string
+          recurrence_type?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          default_time?: string
+          description?: string | null
+          id?: string
+          name?: string
+          priority?: string
+          recurrence_type?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           created_at: string

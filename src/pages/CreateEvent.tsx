@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar, Clock, Users, Flag, ArrowRight, Check, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useFriends } from "@/hooks/useFriends";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ type Priority = "low" | "medium" | "high";
 export default function CreateEvent() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { friends } = useFriends();
 
   const [title, setTitle] = useState("");
@@ -35,6 +36,25 @@ export default function CreateEvent() {
   const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>();
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Pre-fill from template params
+  useEffect(() => {
+    const templateTitle = searchParams.get("title");
+    const templateDesc = searchParams.get("description");
+    const templateTime = searchParams.get("time");
+    const templatePriority = searchParams.get("priority") as Priority | null;
+    const templateRecurrence = searchParams.get("recurrence");
+
+    if (templateTitle) setTitle(templateTitle);
+    if (templateDesc) setDescription(templateDesc);
+    if (templateTime) setTime(templateTime);
+    if (templatePriority && ["low", "medium", "high"].includes(templatePriority)) {
+      setPriority(templatePriority);
+    }
+    if (templateRecurrence && ["daily", "weekly", "monthly"].includes(templateRecurrence)) {
+      setRecurrenceType(templateRecurrence as RecurrenceType);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!loading && !user) {
