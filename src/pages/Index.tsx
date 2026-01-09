@@ -246,7 +246,7 @@ export default function Index() {
 
       {/* Footer */}
       <footer className="border-t border-border/50 py-8 mt-auto">
-        <div className="container flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="container flex flex-col items-center gap-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
@@ -276,7 +276,7 @@ export default function Index() {
               </Tooltip>
             </TooltipProvider>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground text-center">
             © 2024 SyncMates. Made with ♥ for better planning.
           </p>
         </div>
