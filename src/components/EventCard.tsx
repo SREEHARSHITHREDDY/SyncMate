@@ -13,7 +13,8 @@ import {
   HelpCircle,
   Loader2,
   Repeat,
-  CalendarX
+  CalendarX,
+  FileText
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useState } from "react";
@@ -37,6 +38,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MeetingMinutesDialog } from "./MeetingMinutesDialog";
 
 interface Attendee {
   user_id: string;
@@ -64,6 +66,7 @@ export function EventCard({ event, onEdit, onCancelOccurrence, showActions = tru
   const [loadingAttendees, setLoadingAttendees] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
   const [isTogglingComplete, setIsTogglingComplete] = useState(false);
+  const [showMinutesDialog, setShowMinutesDialog] = useState(false);
 
   const isCompleted = (event as any).is_completed || false;
   const isStrikethrough = isCancelled || isCompleted;
@@ -311,22 +314,34 @@ export function EventCard({ event, onEdit, onCancelOccurrence, showActions = tru
           )}
         </div>
 
-        {/* Attendees section */}
+        {/* Attendees and Minutes section */}
         <div className="mt-3 pt-3 border-t border-border">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-2 text-muted-foreground hover:text-foreground px-2 -ml-2"
-            onClick={loadAttendees}
-            disabled={loadingAttendees}
-          >
-            {loadingAttendees ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Users className="h-3 w-3" />
-            )}
-            {showAttendees ? "Hide attendees" : "Show attendees"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-muted-foreground hover:text-foreground px-2"
+              onClick={loadAttendees}
+              disabled={loadingAttendees}
+            >
+              {loadingAttendees ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Users className="h-3 w-3" />
+              )}
+              {showAttendees ? "Hide attendees" : "Show attendees"}
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-muted-foreground hover:text-foreground px-2"
+              onClick={() => setShowMinutesDialog(true)}
+            >
+              <FileText className="h-3 w-3" />
+              Meeting Minutes
+            </Button>
+          </div>
 
           {showAttendees && attendees.length > 0 && (
             <div className="mt-2 space-y-2">
@@ -368,6 +383,15 @@ export function EventCard({ event, onEdit, onCancelOccurrence, showActions = tru
             <p className="text-sm text-muted-foreground mt-2">No invitees for this event</p>
           )}
         </div>
+
+        {/* Meeting Minutes Dialog */}
+        <MeetingMinutesDialog
+          eventId={event.id}
+          eventTitle={event.title}
+          open={showMinutesDialog}
+          onOpenChange={setShowMinutesDialog}
+          canEdit={event.isCreator || event.response === "yes"}
+        />
       </CardContent>
     </Card>
   );
