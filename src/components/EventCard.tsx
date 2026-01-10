@@ -388,6 +388,7 @@ export function EventCard({ event, onEdit, onCancelOccurrence, showActions = tru
         <MeetingMinutesDialog
           eventId={event.id}
           eventTitle={event.title}
+          eventDate={format(parseISO(event.event_date), "MMMM d, yyyy")}
           open={showMinutesDialog}
           onOpenChange={setShowMinutesDialog}
           canEdit={event.isCreator || event.response === "yes"}
