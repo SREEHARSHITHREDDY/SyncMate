@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { Calendar as CalendarIcon, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,29 +24,33 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { UserActionItem } from "@/hooks/useUserActionItems";
+import { TagInput } from "@/components/TagInput";
 
 interface TaskEditDialogProps {
   item: UserActionItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  allTags?: string[];
 }
 
-export function TaskEditDialog({ item, open, onOpenChange }: TaskEditDialogProps) {
+export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskEditDialogProps) {
   const [content, setContent] = useState(item?.content || "");
   const [dueDate, setDueDate] = useState<Date | undefined>(
     item?.due_date ? parseISO(item.due_date) : undefined
   );
+  const [tags, setTags] = useState<string[]>(item?.tags || []);
   const [isSaving, setIsSaving] = useState(false);
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  // Update state when item changes
-  useState(() => {
-    if (item) {
+  // Reset form when dialog opens with new item
+  useEffect(() => {
+    if (open && item) {
       setContent(item.content);
       setDueDate(item.due_date ? parseISO(item.due_date) : undefined);
+      setTags(item.tags || []);
     }
-  });
+  }, [open, item]);
 
   const handleSave = async () => {
     if (!item || !content.trim()) {
@@ -61,6 +65,7 @@ export function TaskEditDialog({ item, open, onOpenChange }: TaskEditDialogProps
         .update({
           content: content.trim(),
           due_date: dueDate ? dueDate.toISOString() : null,
+          tags: tags,
           reminder_sent: dueDate && item.due_date !== dueDate.toISOString() ? false : item.reminder_sent,
         })
         .eq("id", item.id);
@@ -82,19 +87,10 @@ export function TaskEditDialog({ item, open, onOpenChange }: TaskEditDialogProps
     setDueDate(undefined);
   };
 
-  // Reset form when dialog opens with new item
-  const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen && item) {
-      setContent(item.content);
-      setDueDate(item.due_date ? parseISO(item.due_date) : undefined);
-    }
-    onOpenChange(newOpen);
-  };
-
   if (!item) return null;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Edit Task</DialogTitle>
@@ -150,6 +146,15 @@ export function TaskEditDialog({ item, open, onOpenChange }: TaskEditDialogProps
                 </Button>
               )}
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <TagInput
+              tags={tags}
+              onChange={setTags}
+              suggestions={allTags}
+              placeholder="Add a tag..."
+            />
           </div>
           <div className="text-sm text-muted-foreground">
             <span className="font-medium">Event:</span> {item.event_title}

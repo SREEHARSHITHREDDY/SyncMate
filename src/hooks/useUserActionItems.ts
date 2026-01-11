@@ -15,6 +15,8 @@ export interface UserActionItem {
   created_by: string;
   created_at: string;
   updated_at: string;
+  tags: string[];
+  sort_order: number;
   event_title?: string;
 }
 
@@ -30,7 +32,7 @@ export function useUserActionItems(includeCompleted = false) {
         .from("action_items")
         .select("*")
         .eq("assignee_id", user!.id)
-        .order("due_date", { ascending: true, nullsFirst: false });
+        .order("sort_order", { ascending: true });
 
       if (!includeCompleted) {
         query = query.eq("is_completed", false);
@@ -51,6 +53,8 @@ export function useUserActionItems(includeCompleted = false) {
 
       return actionItems.map((item) => ({
         ...item,
+        tags: item.tags || [],
+        sort_order: item.sort_order || 0,
         event_title: eventMap.get(item.event_id) || "Unknown Event",
       })) as UserActionItem[];
     },
@@ -87,6 +91,9 @@ export function useUserActionItems(includeCompleted = false) {
   const incompleteItems = items.filter(item => !item.is_completed);
   const completedItems = items.filter(item => item.is_completed);
   
+  // Get all unique tags
+  const allTags = [...new Set(items.flatMap(item => item.tags || []))].sort();
+  
   const overdueCount = incompleteItems.filter(
     (item) => item.due_date && new Date(item.due_date) < new Date()
   ).length;
@@ -102,6 +109,7 @@ export function useUserActionItems(includeCompleted = false) {
     actionItems: incompleteItems,
     completedItems,
     allItems: items,
+    allTags,
     isLoading: actionItemsQuery.isLoading,
     overdueCount,
     dueSoonCount,

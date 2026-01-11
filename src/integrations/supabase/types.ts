@@ -26,6 +26,8 @@ export type Database = {
           is_completed: boolean
           minute_id: string
           reminder_sent: boolean
+          sort_order: number | null
+          tags: string[] | null
           updated_at: string
         }
         Insert: {
@@ -39,6 +41,8 @@ export type Database = {
           is_completed?: boolean
           minute_id: string
           reminder_sent?: boolean
+          sort_order?: number | null
+          tags?: string[] | null
           updated_at?: string
         }
         Update: {
@@ -52,6 +56,8 @@ export type Database = {
           is_completed?: boolean
           minute_id?: string
           reminder_sent?: boolean
+          sort_order?: number | null
+          tags?: string[] | null
           updated_at?: string
         }
         Relationships: [
