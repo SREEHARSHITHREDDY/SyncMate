@@ -14,6 +14,7 @@ import { Loader2, FileText, Trash2, Plus, Download, Mail } from "lucide-react";
 import { MeetingAttachments } from "@/components/MeetingAttachments";
 import { CollaborativeEditor } from "@/components/CollaborativeEditor";
 import { MentionText } from "@/components/MentionText";
+import { ActionItems } from "@/components/ActionItems";
 import { format, parseISO } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -433,6 +434,7 @@ export function MeetingMinutesDialog({
                           <MentionText content={minute.content} />
                         </div>
                         <MeetingAttachments minuteId={minute.id} canEdit={canEdit} />
+                        <ActionItems eventId={eventId} minuteId={minute.id} canEdit={canEdit} />
                       </div>
                     ))}
                   </div>
