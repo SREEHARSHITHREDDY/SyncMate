@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { 
   ListTodo, Clock, AlertTriangle, CheckCircle2, Search, 
   ArrowUpDown, Trash2, Calendar as CalendarIcon, SortAsc, SortDesc,
-  RotateCcw, Pencil, History, Keyboard
+  RotateCcw, Pencil, History, Keyboard, GripVertical, Tag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isPast, isToday, isTomorrow, parseISO, differenceInDays } from "date-fns";
@@ -43,28 +43,66 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { TaskEditDialog } from "@/components/TaskEditDialog";
+import { TagBadge, getTagColor } from "@/components/TagInput";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type FilterType = "all" | "overdue" | "today" | "upcoming" | "no-date";
-type SortType = "due-date" | "created" | "event";
+type SortType = "custom" | "due-date" | "created" | "event";
 type SortDirection = "asc" | "desc";
 type TabType = "active" | "completed";
 
 export default function MyTasks() {
-  const { actionItems, completedItems, isLoading, overdueCount, totalCount, completedCount } = useUserActionItems(true);
+  const { actionItems, completedItems, allTags, isLoading, overdueCount, totalCount, completedCount } = useUserActionItems(true);
   const [activeTab, setActiveTab] = useState<TabType>("active");
   const [filter, setFilter] = useState<FilterType>("all");
-  const [sortBy, setSortBy] = useState<SortType>("due-date");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortType>("custom");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<UserActionItem | null>(null);
+  const [localItems, setLocalItems] = useState<UserActionItem[]>([]);
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  // Current items based on active tab
-  const currentItems = activeTab === "active" ? actionItems : completedItems;
+  // Keep local items in sync with server items
+  useEffect(() => {
+    if (activeTab === "active") {
+      setLocalItems(actionItems);
+    } else {
+      setLocalItems(completedItems);
+    }
+  }, [actionItems, completedItems, activeTab]);
+
+  // DnD Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Calculate counts for each filter
   const dueTodayCount = actionItems.filter(item => {
@@ -105,11 +143,16 @@ export default function MyTasks() {
     };
   };
 
-  // Filter items (only for active tab)
-  const filteredItems = currentItems.filter(item => {
+  // Filter items
+  const filteredItems = localItems.filter(item => {
     // Search filter
     if (searchQuery && !item.content.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !item.event_title?.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+
+    // Tag filter
+    if (tagFilter && !item.tags?.includes(tagFilter)) {
       return false;
     }
 
@@ -136,26 +179,64 @@ export default function MyTasks() {
   });
 
   // Sort items
-  const sortedItems = [...filteredItems].sort((a, b) => {
-    let comparison = 0;
+  const sortedItems = sortBy === "custom" 
+    ? filteredItems 
+    : [...filteredItems].sort((a, b) => {
+        let comparison = 0;
+        
+        switch (sortBy) {
+          case "due-date":
+            if (!a.due_date && !b.due_date) comparison = 0;
+            else if (!a.due_date) comparison = 1;
+            else if (!b.due_date) comparison = -1;
+            else comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+            break;
+          case "created":
+            comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            break;
+          case "event":
+            comparison = (a.event_title || "").localeCompare(b.event_title || "");
+            break;
+        }
+        
+        return sortDirection === "desc" ? -comparison : comparison;
+      });
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
     
-    switch (sortBy) {
-      case "due-date":
-        if (!a.due_date && !b.due_date) comparison = 0;
-        else if (!a.due_date) comparison = 1;
-        else if (!b.due_date) comparison = -1;
-        else comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-        break;
-      case "created":
-        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        break;
-      case "event":
-        comparison = (a.event_title || "").localeCompare(b.event_title || "");
-        break;
+    if (!over || active.id === over.id) return;
+    
+    const oldIndex = localItems.findIndex(item => item.id === active.id);
+    const newIndex = localItems.findIndex(item => item.id === over.id);
+    
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Optimistically update local state
+    const newItems = arrayMove(localItems, oldIndex, newIndex);
+    setLocalItems(newItems);
+
+    // Update sort_order in database
+    try {
+      const updates = newItems.map((item, index) => ({
+        id: item.id,
+        sort_order: index,
+      }));
+
+      for (const update of updates) {
+        await supabase
+          .from("action_items")
+          .update({ sort_order: update.sort_order })
+          .eq("id", update.id);
+      }
+
+      toast.success("Task order updated");
+    } catch (error) {
+      // Revert on error
+      setLocalItems(activeTab === "active" ? actionItems : completedItems);
+      toast.error("Failed to update task order");
     }
-    
-    return sortDirection === "desc" ? -comparison : comparison;
-  });
+  };
 
   const handleToggleComplete = async (item: UserActionItem) => {
     setProcessingIds(prev => new Set(prev).add(item.id));
@@ -314,23 +395,19 @@ export default function MyTasks() {
         if (e.key !== "Escape") return;
       }
 
-      // Cmd/Ctrl + A - Select All
       if ((e.metaKey || e.ctrlKey) && e.key === "a" && !e.shiftKey) {
         e.preventDefault();
         toggleSelectAll();
         return;
       }
 
-      // Escape - Clear selection
       if (e.key === "Escape") {
         e.preventDefault();
         clearSelection();
         return;
       }
 
-      // Delete/Backspace - Delete selected (when items are selected)
       if ((e.key === "Delete" || e.key === "Backspace") && selectedItems.size > 0) {
-        // Only trigger if not in input
         if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
           e.preventDefault();
           setShowBulkDeleteDialog(true);
@@ -338,7 +415,6 @@ export default function MyTasks() {
         return;
       }
 
-      // Cmd/Ctrl + Enter - Complete selected
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && selectedItems.size > 0) {
         e.preventDefault();
         if (activeTab === "active") {
@@ -357,6 +433,7 @@ export default function MyTasks() {
   // Clear selection when switching tabs
   useEffect(() => {
     setSelectedItems(new Set());
+    setTagFilter(null);
   }, [activeTab]);
 
   return (
@@ -484,25 +561,56 @@ export default function MyTasks() {
                           <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="custom">Custom Order</SelectItem>
                           <SelectItem value="due-date">Due Date</SelectItem>
                           <SelectItem value="created">Created</SelectItem>
                           <SelectItem value="event">Event</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
-                        className="h-8 w-8 p-0"
-                      >
-                        {sortDirection === "asc" ? (
-                          <SortAsc className="h-4 w-4" />
-                        ) : (
-                          <SortDesc className="h-4 w-4" />
-                        )}
-                      </Button>
+                      {sortBy !== "custom" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
+                          className="h-8 w-8 p-0"
+                        >
+                          {sortDirection === "asc" ? (
+                            <SortAsc className="h-4 w-4" />
+                          ) : (
+                            <SortDesc className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
+
+                  {/* Tag Filter */}
+                  {allTags.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Tag className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Filter by tag:</span>
+                      <Button
+                        variant={tagFilter === null ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => setTagFilter(null)}
+                        className="h-6 text-xs"
+                      >
+                        All
+                      </Button>
+                      {allTags.map(tag => (
+                        <Button
+                          key={tag}
+                          variant={tagFilter === tag ? "secondary" : "ghost"}
+                          size="sm"
+                          onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+                          className={cn("h-6 text-xs gap-1", tagFilter === tag && getTagColor(tag))}
+                        >
+                          <Tag className="h-3 w-3" />
+                          {tag}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -552,22 +660,78 @@ export default function MyTasks() {
               </Card>
             )}
 
-            {/* Task List */}
-            <TaskList
-              items={sortedItems}
-              isLoading={isLoading}
-              selectedItems={selectedItems}
-              processingIds={processingIds}
-              filter={filter}
-              searchQuery={searchQuery}
-              isCompleted={false}
-              onToggleSelect={toggleSelectItem}
-              onToggleSelectAll={toggleSelectAll}
-              onComplete={handleToggleComplete}
-              onRestore={handleRestoreItem}
-              onEdit={setEditingItem}
-              getDueDateInfo={getDueDateInfo}
-            />
+            {/* Task List with Drag and Drop */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Tasks</CardTitle>
+                    <CardDescription>
+                      {sortedItems.length} task{sortedItems.length !== 1 ? "s" : ""} shown
+                      {sortBy === "custom" && " • Drag to reorder"}
+                    </CardDescription>
+                  </div>
+                  {sortedItems.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={toggleSelectAll}
+                      className="text-xs"
+                    >
+                      {selectedItems.size === sortedItems.length ? "Deselect All" : "Select All"}
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12 text-muted-foreground">
+                    Loading tasks...
+                  </div>
+                ) : sortedItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <CheckCircle2 className="h-12 w-12 mb-3 text-primary/30" />
+                    <p className="text-lg font-medium">
+                      {filter === "all" && !searchQuery && !tagFilter ? "No tasks assigned to you" : "No matching tasks"}
+                    </p>
+                    <p className="text-sm">
+                      {filter === "overdue" ? "Great job! No overdue tasks." : 
+                       filter === "today" ? "Nothing due today." :
+                       tagFilter ? `No tasks with tag "${tagFilter}".` :
+                       searchQuery ? "Try a different search term." :
+                       "Action items will appear here when assigned."}
+                    </p>
+                  </div>
+                ) : (
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={sortedItems.map(item => item.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-2">
+                        {sortedItems.map((item) => (
+                          <SortableTaskItem
+                            key={item.id}
+                            item={item}
+                            isSelected={selectedItems.has(item.id)}
+                            isProcessing={processingIds.has(item.id)}
+                            isDraggable={sortBy === "custom"}
+                            onToggleSelect={() => toggleSelectItem(item.id)}
+                            onComplete={() => handleToggleComplete(item)}
+                            onEdit={() => setEditingItem(item)}
+                            getDueDateInfo={getDueDateInfo}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="completed" className="space-y-4">
@@ -595,10 +759,6 @@ export default function MyTasks() {
                       {selectedItems.size} task(s) selected
                     </span>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
-                        <Keyboard className="h-3.5 w-3.5" />
-                        <span>⌘A select all • Esc clear • ⌘↵ restore • Del delete</span>
-                      </div>
                       <Button
                         variant="outline"
                         size="sm"
@@ -632,21 +792,103 @@ export default function MyTasks() {
             )}
 
             {/* Completed Task List */}
-            <TaskList
-              items={sortedItems}
-              isLoading={isLoading}
-              selectedItems={selectedItems}
-              processingIds={processingIds}
-              filter="all"
-              searchQuery={searchQuery}
-              isCompleted={true}
-              onToggleSelect={toggleSelectItem}
-              onToggleSelectAll={toggleSelectAll}
-              onComplete={handleToggleComplete}
-              onRestore={handleRestoreItem}
-              onEdit={setEditingItem}
-              getDueDateInfo={getDueDateInfo}
-            />
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Completed Tasks</CardTitle>
+                  {sortedItems.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={toggleSelectAll}
+                      className="text-xs"
+                    >
+                      {selectedItems.size === sortedItems.length ? "Deselect All" : "Select All"}
+                    </Button>
+                  )}
+                </div>
+                <CardDescription>
+                  {sortedItems.length} task{sortedItems.length !== 1 ? "s" : ""} shown
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12 text-muted-foreground">
+                    Loading tasks...
+                  </div>
+                ) : sortedItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <CheckCircle2 className="h-12 w-12 mb-3 text-primary/30" />
+                    <p className="text-lg font-medium">No completed tasks yet</p>
+                    <p className="text-sm">Completed tasks will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {sortedItems.map((item) => {
+                      const dueDateInfo = getDueDateInfo(item.due_date);
+                      const isSelected = selectedItems.has(item.id);
+                      const isProcessing = processingIds.has(item.id);
+                      
+                      return (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
+                            isSelected && "ring-2 ring-primary/50",
+                            "hover:bg-accent/30"
+                          )}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectItem(item.id)}
+                            className="mt-1"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium leading-tight line-through text-muted-foreground">
+                              {item.content}
+                            </p>
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                              <Link 
+                                to="/calendar" 
+                                className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+                              >
+                                <CalendarIcon className="h-3 w-3" />
+                                {item.event_title}
+                              </Link>
+                              {dueDateInfo && (
+                                <Badge variant="secondary" className="text-xs px-2 py-0.5 gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {dueDateInfo.label}
+                                </Badge>
+                              )}
+                              {item.tags?.map(tag => (
+                                <TagBadge key={tag} tag={tag} />
+                              ))}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRestoreItem(item)}
+                            disabled={isProcessing}
+                            className="gap-1.5"
+                          >
+                            {isProcessing ? (
+                              <RotateCcw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <RotateCcw className="h-4 w-4" />
+                                <span className="hidden sm:inline">Restore</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
@@ -674,209 +916,147 @@ export default function MyTasks() {
         item={editingItem}
         open={!!editingItem}
         onOpenChange={(open) => !open && setEditingItem(null)}
+        allTags={allTags}
       />
     </AppLayout>
   );
 }
 
-// Task List Component
-interface TaskListProps {
-  items: UserActionItem[];
-  isLoading: boolean;
-  selectedItems: Set<string>;
-  processingIds: Set<string>;
-  filter: FilterType;
-  searchQuery: string;
-  isCompleted: boolean;
-  onToggleSelect: (id: string) => void;
-  onToggleSelectAll: () => void;
-  onComplete: (item: UserActionItem) => void;
-  onRestore: (item: UserActionItem) => void;
-  onEdit: (item: UserActionItem) => void;
+// Sortable Task Item Component
+interface SortableTaskItemProps {
+  item: UserActionItem;
+  isSelected: boolean;
+  isProcessing: boolean;
+  isDraggable: boolean;
+  onToggleSelect: () => void;
+  onComplete: () => void;
+  onEdit: () => void;
   getDueDateInfo: (dueDate: string | null) => { label: string; isOverdue: boolean; isUrgent: boolean; isToday: boolean } | null;
 }
 
-function TaskList({
-  items,
-  isLoading,
-  selectedItems,
-  processingIds,
-  filter,
-  searchQuery,
-  isCompleted,
+function SortableTaskItem({
+  item,
+  isSelected,
+  isProcessing,
+  isDraggable,
   onToggleSelect,
-  onToggleSelectAll,
   onComplete,
-  onRestore,
   onEdit,
   getDueDateInfo,
-}: TaskListProps) {
+}: SortableTaskItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id, disabled: !isDraggable });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const dueDateInfo = getDueDateInfo(item.due_date);
+
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">{isCompleted ? "Completed Tasks" : "Tasks"}</CardTitle>
-          {items.length > 0 && (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
+        dueDateInfo?.isOverdue && "border-destructive/50 bg-destructive/5",
+        dueDateInfo?.isToday && "border-primary/50 bg-primary/5",
+        isSelected && "ring-2 ring-primary/50",
+        isDragging && "opacity-50 shadow-lg",
+        "hover:bg-accent/30"
+      )}
+    >
+      {isDraggable && (
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing touch-none p-1 -ml-1 text-muted-foreground hover:text-foreground"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      )}
+      <Checkbox
+        checked={isSelected}
+        onCheckedChange={onToggleSelect}
+        className="mt-1"
+      />
+      <div className="flex-1 min-w-0">
+        <p className={cn(
+          "font-medium leading-tight",
+          isProcessing && "line-through text-muted-foreground"
+        )}>
+          {item.content}
+        </p>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          <Link 
+            to="/calendar" 
+            className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+          >
+            <CalendarIcon className="h-3 w-3" />
+            {item.event_title}
+          </Link>
+          {dueDateInfo && (
+            <Badge 
+              variant={dueDateInfo.isOverdue ? "destructive" : dueDateInfo.isToday ? "default" : "secondary"}
+              className="text-xs px-2 py-0.5 gap-1"
+            >
+              <Clock className="h-3 w-3" />
+              {dueDateInfo.label}
+            </Badge>
+          )}
+          {!item.due_date && (
+            <Badge variant="outline" className="text-xs px-2 py-0.5">
+              No due date
+            </Badge>
+          )}
+          {item.tags?.map(tag => (
+            <TagBadge key={tag} tag={tag} />
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <Tooltip>
+          <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              onClick={onToggleSelectAll}
-              className="text-xs"
+              onClick={onEdit}
+              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
             >
-              {selectedItems.size === items.length ? "Deselect All" : "Select All"}
+              <Pencil className="h-4 w-4" />
             </Button>
-          )}
-        </div>
-        <CardDescription>
-          {items.length} task{items.length !== 1 ? "s" : ""} shown
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12 text-muted-foreground">
-            Loading tasks...
-          </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <CheckCircle2 className="h-12 w-12 mb-3 text-primary/30" />
-            <p className="text-lg font-medium">
-              {isCompleted 
-                ? "No completed tasks yet"
-                : filter === "all" && !searchQuery 
-                  ? "No tasks assigned to you" 
-                  : "No matching tasks"}
-            </p>
-            <p className="text-sm">
-              {isCompleted
-                ? "Completed tasks will appear here."
-                : filter === "overdue" ? "Great job! No overdue tasks." : 
-                  filter === "today" ? "Nothing due today." :
-                  searchQuery ? "Try a different search term." :
-                  "Action items will appear here when assigned."}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {items.map((item) => {
-              const dueDateInfo = getDueDateInfo(item.due_date);
-              const isSelected = selectedItems.has(item.id);
-              const isProcessing = processingIds.has(item.id);
-              
-              return (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
-                    !isCompleted && dueDateInfo?.isOverdue && "border-destructive/50 bg-destructive/5",
-                    !isCompleted && dueDateInfo?.isToday && "border-primary/50 bg-primary/5",
-                    isSelected && "ring-2 ring-primary/50",
-                    "hover:bg-accent/30"
-                  )}
-                >
-                  <Checkbox
-                    checked={isSelected}
-                    onCheckedChange={() => onToggleSelect(item.id)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className={cn(
-                      "font-medium leading-tight",
-                      (isCompleted || isProcessing) && "line-through text-muted-foreground"
-                    )}>
-                      {item.content}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <Link 
-                        to="/calendar" 
-                        className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
-                      >
-                        <CalendarIcon className="h-3 w-3" />
-                        {item.event_title}
-                      </Link>
-                      {dueDateInfo && (
-                        <Badge 
-                          variant={isCompleted ? "secondary" : dueDateInfo.isOverdue ? "destructive" : dueDateInfo.isToday ? "default" : "secondary"}
-                          className="text-xs px-2 py-0.5 gap-1"
-                        >
-                          <Clock className="h-3 w-3" />
-                          {dueDateInfo.label}
-                        </Badge>
-                      )}
-                      {!item.due_date && (
-                        <Badge variant="outline" className="text-xs px-2 py-0.5">
-                          No due date
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {!isCompleted && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onEdit(item)}
-                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Edit task</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {isCompleted ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onRestore(item)}
-                            disabled={isProcessing}
-                            className="gap-1.5"
-                          >
-                            {isProcessing ? (
-                              <RotateCcw className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <RotateCcw className="h-4 w-4" />
-                                <span className="hidden sm:inline">Restore</span>
-                              </>
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Restore task</TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onComplete(item)}
-                            disabled={isProcessing}
-                            className="gap-1.5"
-                          >
-                            {isProcessing ? (
-                              <CheckCircle2 className="h-4 w-4 animate-pulse text-primary" />
-                            ) : (
-                              <>
-                                <CheckCircle2 className="h-4 w-4" />
-                                <span className="hidden sm:inline">Complete</span>
-                              </>
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Mark as complete</TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          </TooltipTrigger>
+          <TooltipContent>Edit task</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onComplete}
+              disabled={isProcessing}
+              className="gap-1.5"
+            >
+              {isProcessing ? (
+                <CheckCircle2 className="h-4 w-4 animate-pulse text-primary" />
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Complete</span>
+                </>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Mark as complete</TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
   );
 }
