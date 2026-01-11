@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_items: {
+        Row: {
+          assignee_id: string | null
+          content: string
+          created_at: string
+          created_by: string
+          event_id: string
+          id: string
+          is_completed: boolean
+          minute_id: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          content: string
+          created_at?: string
+          created_by: string
+          event_id: string
+          id?: string
+          is_completed?: boolean
+          minute_id: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string
+          event_id?: string
+          id?: string
+          is_completed?: boolean
+          minute_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_items_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_items_minute_id_fkey"
+            columns: ["minute_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_minutes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_exceptions: {
         Row: {
           created_at: string
