@@ -10,7 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useMeetingMinutes } from "@/hooks/useMeetingMinutes";
-import { Loader2, FileText, Trash2, Plus, Download, Mail } from "lucide-react";
+import { Loader2, FileText, Trash2, Plus, Download, Mail, Paperclip } from "lucide-react";
+import { MeetingAttachments } from "@/components/MeetingAttachments";
 import { format, parseISO } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -336,9 +337,10 @@ export function MeetingMinutesDialog({
                             </div>
                           )}
                         </div>
-                        <div className="text-sm whitespace-pre-wrap">
+                        <div className="text-sm whitespace-pre-wrap mb-3">
                           {minute.content}
                         </div>
+                        <MeetingAttachments minuteId={minute.id} canEdit={canEdit} />
                       </div>
                     ))}
                   </div>
