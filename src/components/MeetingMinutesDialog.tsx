@@ -8,10 +8,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { useMeetingMinutes } from "@/hooks/useMeetingMinutes";
-import { Loader2, FileText, Trash2, Plus, Download, Mail, Paperclip } from "lucide-react";
+import { useMeetingAttachments } from "@/hooks/useMeetingAttachments";
+import { Loader2, FileText, Trash2, Plus, Download, Mail } from "lucide-react";
 import { MeetingAttachments } from "@/components/MeetingAttachments";
+import { CollaborativeEditor } from "@/components/CollaborativeEditor";
 import { format, parseISO } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -101,22 +102,62 @@ export function MeetingMinutesDialog({
     setIsEditing(false);
   };
 
-  const getAllMinutesContent = () => {
+  // Fetch all attachments for all minutes
+  const getAllAttachmentsForMinutes = async () => {
+    const allAttachments: { minuteId: string; attachments: any[] }[] = [];
+    
+    for (const minute of minutes) {
+      const { data } = await supabase
+        .from("meeting_minute_attachments")
+        .select("*")
+        .eq("minute_id", minute.id)
+        .order("created_at", { ascending: true });
+      
+      if (data && data.length > 0) {
+        allAttachments.push({ minuteId: minute.id, attachments: data });
+      }
+    }
+    
+    return allAttachments;
+  };
+
+  const getAttachmentUrl = (filePath: string) => {
+    const { data } = supabase.storage
+      .from("meeting-attachments")
+      .getPublicUrl(filePath);
+    return data.publicUrl;
+  };
+
+  const getAllMinutesContent = async () => {
+    const allAttachments = await getAllAttachmentsForMinutes();
+    
     return minutes
       .map((m) => {
         const dateStr = format(parseISO(m.created_at), "MMM d, yyyy 'at' h:mm a");
-        return `[${dateStr}]\n${m.content}`;
+        let content = `[${dateStr}]\n${m.content}`;
+        
+        // Add attachments info
+        const minuteAttachments = allAttachments.find(a => a.minuteId === m.id);
+        if (minuteAttachments && minuteAttachments.attachments.length > 0) {
+          content += `\n\nAttachments:\n`;
+          minuteAttachments.attachments.forEach((att: any) => {
+            content += `- ${att.file_name}: ${getAttachmentUrl(att.file_path)}\n`;
+          });
+        }
+        
+        return content;
       })
       .join("\n\n---\n\n");
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (minutes.length === 0) {
       toast.error("No minutes to export");
       return;
     }
 
     try {
+      const allAttachments = await getAllAttachmentsForMinutes();
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const margin = 20;
@@ -181,6 +222,36 @@ export function MeetingMinutesDialog({
           yPosition += 5;
         }
 
+        // Add attachments section
+        const minuteAttachments = allAttachments.find(a => a.minuteId === minute.id);
+        if (minuteAttachments && minuteAttachments.attachments.length > 0) {
+          yPosition += 5;
+          if (yPosition > 260) {
+            doc.addPage();
+            yPosition = 20;
+          }
+          
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(100);
+          doc.text("Attachments:", margin, yPosition);
+          yPosition += 5;
+          
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(66, 135, 245); // Blue color for links
+          
+          for (const att of minuteAttachments.attachments) {
+            if (yPosition > 270) {
+              doc.addPage();
+              yPosition = 20;
+            }
+            const url = getAttachmentUrl(att.file_path);
+            doc.textWithLink(`• ${att.file_name}`, margin + 5, yPosition, { url });
+            yPosition += 5;
+          }
+          
+          doc.setTextColor(0);
+        }
+
         yPosition += 10;
       }
 
@@ -217,8 +288,17 @@ export function MeetingMinutesDialog({
         return;
       }
 
-      const minutesContent = getAllMinutesContent();
+      const minutesContent = await getAllMinutesContent();
       const formattedDate = eventDate || format(new Date(), "MMMM d, yyyy");
+
+      // Get attachments for email
+      const allAttachments = await getAllAttachmentsForMinutes();
+      const attachmentLinks = allAttachments.flatMap(a => 
+        a.attachments.map((att: any) => ({
+          name: att.file_name,
+          url: getAttachmentUrl(att.file_path),
+        }))
+      );
 
       const response = await supabase.functions.invoke("share-meeting-minutes", {
         body: {
@@ -226,6 +306,7 @@ export function MeetingMinutesDialog({
           eventTitle,
           eventDate: formattedDate,
           minutesContent,
+          attachments: attachmentLinks,
         },
       });
 
@@ -257,7 +338,7 @@ export function MeetingMinutesDialog({
               Meeting Minutes
             </DialogTitle>
             <DialogDescription>
-              Minutes for "{eventTitle}"
+              Minutes for "{eventTitle}" • Real-time collaborative editing enabled
             </DialogDescription>
           </DialogHeader>
 
@@ -271,12 +352,13 @@ export function MeetingMinutesDialog({
                 {/* New/Edit form */}
                 {(isEditing || (canEdit && minutes.length === 0)) && (
                   <div className="space-y-3 mb-4">
-                    <Textarea
-                      placeholder="Enter meeting minutes, key decisions, action items..."
+                    <CollaborativeEditor
+                      eventId={eventId}
+                      minuteId={editingId}
                       value={content}
-                      onChange={(e) => setContent(e.target.value)}
+                      onChange={setContent}
+                      placeholder="Enter meeting minutes, key decisions, action items..."
                       rows={8}
-                      className="resize-none"
                     />
                     <div className="flex gap-2">
                       <Button onClick={handleSave} disabled={isSaving || !content.trim()}>
@@ -371,7 +453,7 @@ export function MeetingMinutesDialog({
                         <Download className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Export as PDF</TooltipContent>
+                    <TooltipContent>Export as PDF (with attachments)</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -388,7 +470,7 @@ export function MeetingMinutesDialog({
                         )}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Share via Email</TooltipContent>
+                    <TooltipContent>Share via Email (with attachments)</TooltipContent>
                   </Tooltip>
                 </>
               )}

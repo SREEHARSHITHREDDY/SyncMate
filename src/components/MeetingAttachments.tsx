@@ -1,8 +1,10 @@
-import { useRef } from "react";
+import { useRef, useState, DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useMeetingAttachments, MeetingAttachment } from "@/hooks/useMeetingAttachments";
-import { Loader2, Paperclip, X, FileImage, FileText, File, ExternalLink } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Loader2, Paperclip, X, FileImage, FileText, File, ExternalLink, Upload } from "lucide-react";
+import { ImagePreviewModal } from "@/components/ImagePreviewModal";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface MeetingAttachmentsProps {
   minuteId: string;
@@ -27,6 +29,9 @@ function getFileIcon(fileType: string) {
 
 export function MeetingAttachments({ minuteId, canEdit }: MeetingAttachmentsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
+  
   const {
     attachments,
     isLoading,
@@ -37,15 +42,34 @@ export function MeetingAttachments({ minuteId, canEdit }: MeetingAttachmentsProp
     getPublicUrl,
   } = useMeetingAttachments(minuteId);
 
+  const validateAndUploadFile = (file: File) => {
+    // Max file size: 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File size must be less than 10MB");
+      return;
+    }
+    
+    // Validate file type
+    const allowedTypes = [
+      "image/jpeg", "image/png", "image/gif", "image/webp",
+      "application/pdf",
+      "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/plain", "text/csv"
+    ];
+    
+    if (!allowedTypes.includes(file.type) && !file.type.startsWith("image/")) {
+      toast.error("File type not supported");
+      return;
+    }
+    
+    uploadFile({ file, minuteId });
+  };
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Max file size: 10MB
-      if (file.size > 10 * 1024 * 1024) {
-        alert("File size must be less than 10MB");
-        return;
-      }
-      uploadFile({ file, minuteId });
+      validateAndUploadFile(file);
     }
     // Reset input
     if (fileInputRef.current) {
@@ -53,9 +77,48 @@ export function MeetingAttachments({ minuteId, canEdit }: MeetingAttachmentsProp
     }
   };
 
+  const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (canEdit) {
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    if (!canEdit) return;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      validateAndUploadFile(files[0]);
+    }
+  };
+
   const handleDelete = (attachment: MeetingAttachment) => {
     if (confirm(`Delete "${attachment.file_name}"?`)) {
       deleteAttachment(attachment);
+    }
+  };
+
+  const handleImageClick = (attachment: MeetingAttachment) => {
+    if (attachment.file_type.startsWith("image/")) {
+      const url = getPublicUrl(attachment.file_path);
+      setPreviewImage({ url, name: attachment.file_name });
     }
   };
 
@@ -69,85 +132,130 @@ export function MeetingAttachments({ minuteId, canEdit }: MeetingAttachmentsProp
   }
 
   return (
-    <div className="space-y-2">
-      {/* Attachments list */}
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {attachments.map((attachment) => {
-            const url = getPublicUrl(attachment.file_path);
-            const isImage = attachment.file_type.startsWith("image/");
-            
-            return (
-              <div
-                key={attachment.id}
-                className="group relative flex items-center gap-2 rounded-md border bg-muted/50 px-2 py-1.5 text-xs"
-              >
-                {isImage ? (
-                  <img
-                    src={url}
-                    alt={attachment.file_name}
-                    className="h-8 w-8 rounded object-cover"
-                  />
-                ) : (
-                  getFileIcon(attachment.file_type)
-                )}
-                <div className="flex flex-col">
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 font-medium hover:underline"
-                  >
-                    <span className="max-w-[120px] truncate">{attachment.file_name}</span>
-                    <ExternalLink className="h-3 w-3 opacity-50" />
-                  </a>
-                  <span className="text-muted-foreground">
-                    {formatFileSize(attachment.file_size)}
-                  </span>
-                </div>
-                {canEdit && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => handleDelete(attachment)}
-                    disabled={isDeleting}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <>
+      <div
+        className={cn(
+          "space-y-2 rounded-md transition-colors",
+          canEdit && isDragOver && "bg-primary/10 ring-2 ring-primary ring-dashed p-2"
+        )}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {/* Drop zone indicator */}
+        {canEdit && isDragOver && (
+          <div className="flex items-center justify-center gap-2 py-4 text-sm text-primary">
+            <Upload className="h-5 w-5" />
+            <span>Drop file to upload</span>
+          </div>
+        )}
 
-      {/* Upload button */}
-      {canEdit && (
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={handleFileSelect}
-            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 text-xs"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-          >
-            {isUploading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Paperclip className="h-3 w-3" />
-            )}
-            Attach file
-          </Button>
-        </div>
+        {/* Attachments list */}
+        {attachments.length > 0 && !isDragOver && (
+          <div className="flex flex-wrap gap-2">
+            {attachments.map((attachment) => {
+              const url = getPublicUrl(attachment.file_path);
+              const isImage = attachment.file_type.startsWith("image/");
+              
+              return (
+                <div
+                  key={attachment.id}
+                  className="group relative flex items-center gap-2 rounded-md border bg-muted/50 px-2 py-1.5 text-xs"
+                >
+                  {isImage ? (
+                    <button
+                      type="button"
+                      onClick={() => handleImageClick(attachment)}
+                      className="h-8 w-8 rounded overflow-hidden hover:ring-2 ring-primary transition-all"
+                    >
+                      <img
+                        src={url}
+                        alt={attachment.file_name}
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  ) : (
+                    getFileIcon(attachment.file_type)
+                  )}
+                  <div className="flex flex-col">
+                    {isImage ? (
+                      <button
+                        type="button"
+                        onClick={() => handleImageClick(attachment)}
+                        className="flex items-center gap-1 font-medium hover:underline text-left"
+                      >
+                        <span className="max-w-[120px] truncate">{attachment.file_name}</span>
+                      </button>
+                    ) : (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 font-medium hover:underline"
+                      >
+                        <span className="max-w-[120px] truncate">{attachment.file_name}</span>
+                        <ExternalLink className="h-3 w-3 opacity-50" />
+                      </a>
+                    )}
+                    <span className="text-muted-foreground">
+                      {formatFileSize(attachment.file_size)}
+                    </span>
+                  </div>
+                  {canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDelete(attachment)}
+                      disabled={isDeleting}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Upload button */}
+        {canEdit && !isDragOver && (
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleFileSelect}
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Paperclip className="h-3 w-3" />
+              )}
+              {isUploading ? "Uploading..." : "Attach file (or drag & drop)"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Image preview modal */}
+      {previewImage && (
+        <ImagePreviewModal
+          open={!!previewImage}
+          onOpenChange={(open) => !open && setPreviewImage(null)}
+          imageUrl={previewImage.url}
+          fileName={previewImage.name}
+        />
       )}
-    </div>
+    </>
   );
 }

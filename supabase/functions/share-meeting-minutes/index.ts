@@ -22,11 +22,17 @@ function escapeHtml(unsafe: string): string {
     .replace(/'/g, "&#039;");
 }
 
+interface Attachment {
+  name: string;
+  url: string;
+}
+
 interface ShareMinutesRequest {
   eventId: string;
   eventTitle: string;
   eventDate: string;
   minutesContent: string;
+  attachments?: Attachment[];
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -58,7 +64,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const { eventId, eventTitle, eventDate, minutesContent }: ShareMinutesRequest = await req.json();
+    const { eventId, eventTitle, eventDate, minutesContent, attachments }: ShareMinutesRequest = await req.json();
 
     if (!eventId || !eventTitle || !minutesContent) {
       return new Response(
@@ -135,6 +141,25 @@ const handler = async (req: Request): Promise<Response> => {
     // Format minutes content for HTML (preserve line breaks)
     const formattedMinutes = escapeHtml(minutesContent).replace(/\n/g, "<br>");
 
+    // Build attachments HTML section
+    let attachmentsHtml = "";
+    if (attachments && attachments.length > 0) {
+      attachmentsHtml = `
+        <div style="background: #fff; border: 1px solid #e5e5e5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin: 0 0 15px 0; color: #333;">📎 Attachments (${attachments.length})</h3>
+          <ul style="margin: 0; padding: 0 0 0 20px;">
+            ${attachments.map(att => `
+              <li style="margin: 8px 0;">
+                <a href="${escapeHtml(att.url)}" target="_blank" rel="noopener noreferrer" style="color: #4287f5; text-decoration: none;">
+                  ${escapeHtml(att.name)}
+                </a>
+              </li>
+            `).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
     // Send email to all participants
     const emailResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -165,6 +190,8 @@ const handler = async (req: Request): Promise<Response> => {
               </div>
             </div>
             
+            ${attachmentsHtml}
+            
             <p style="color: #999; font-size: 12px; margin-top: 30px;">
               This email was sent via SyncMates. You are receiving this because you are a participant of this event.
             </p>
@@ -183,7 +210,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log(`Meeting minutes shared for event ${eventId} to ${recipientEmails.length} recipients`);
+    console.log(`Meeting minutes shared for event ${eventId} to ${recipientEmails.length} recipients with ${attachments?.length || 0} attachments`);
 
     return new Response(
       JSON.stringify({
