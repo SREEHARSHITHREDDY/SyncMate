@@ -430,12 +430,153 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
+    // ==========================================
+    // OVERDUE ACTION ITEM DAILY REMINDERS
+    // ==========================================
+    
+    // Get overdue action items (due date in the past, not completed)
+    // We'll send daily reminders for these
+    const { data: overdueActionItems, error: overdueError } = await supabase
+      .from("action_items")
+      .select("*")
+      .eq("is_completed", false)
+      .not("due_date", "is", null)
+      .lt("due_date", now.toISOString());
+
+    if (overdueError) {
+      console.error("Error fetching overdue action items:", overdueError);
+    }
+
+    const overdueRemindersSent: string[] = [];
+
+    if (overdueActionItems && overdueActionItems.length > 0) {
+      // Group overdue items by assignee
+      const itemsByAssignee = new Map<string, typeof overdueActionItems>();
+      
+      for (const item of overdueActionItems) {
+        if (!item.assignee_id) continue;
+        
+        const existing = itemsByAssignee.get(item.assignee_id) || [];
+        existing.push(item);
+        itemsByAssignee.set(item.assignee_id, existing);
+      }
+
+      // Send one consolidated email per assignee with all their overdue items
+      for (const [assigneeId, items] of itemsByAssignee) {
+        // Get assignee's profile
+        const { data: assigneeProfile } = await supabase
+          .from("profiles")
+          .select("email, name, user_id")
+          .eq("user_id", assigneeId)
+          .maybeSingle();
+
+        if (!assigneeProfile?.email) continue;
+
+        // Get user's notification preferences
+        const { data: prefs } = await supabase
+          .from("notification_preferences")
+          .select("*")
+          .eq("user_id", assigneeId)
+          .maybeSingle();
+
+        const emailEnabled = prefs?.email_enabled ?? true;
+
+        if (!emailEnabled) {
+          console.log(`Skipping overdue reminder for ${assigneeProfile.email}: email disabled`);
+          continue;
+        }
+
+        // Get event titles for context
+        const eventIds = [...new Set(items.map((i) => i.event_id))];
+        const { data: events } = await supabase
+          .from("events")
+          .select("id, title")
+          .in("id", eventIds);
+
+        const eventMap = new Map(events?.map((e) => [e.id, e.title]) || []);
+
+        // Build the list of overdue items
+        const itemsList = items.map((item) => {
+          const dueDate = new Date(item.due_date);
+          const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+          const eventTitle = eventMap.get(item.event_id) || "an event";
+          return `
+            <li style="margin-bottom: 10px; padding: 10px; background: #fff; border-radius: 4px; border-left: 3px solid #dc3545;">
+              <strong>${escapeHtml(item.content)}</strong>
+              <br/>
+              <span style="font-size: 12px; color: #666;">
+                From: ${escapeHtml(eventTitle)} • 
+                ${daysOverdue === 1 ? "1 day" : `${daysOverdue} days`} overdue
+              </span>
+            </li>
+          `;
+        }).join("");
+
+        try {
+          // Send consolidated overdue reminder email
+          const emailResponse = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${RESEND_API_KEY}`,
+            },
+            body: JSON.stringify({
+              from: "Action Item Reminder <onboarding@resend.dev>",
+              to: [assigneeProfile.email],
+              subject: `⚠️ You have ${items.length} overdue action item${items.length > 1 ? "s" : ""}`,
+              html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h1 style="color: #dc3545;">Overdue Action Items</h1>
+                  <p>Hi ${escapeHtml(assigneeProfile.name || "there")}!</p>
+                  <p>You have <strong>${items.length} overdue action item${items.length > 1 ? "s" : ""}</strong> that need${items.length === 1 ? "s" : ""} your attention:</p>
+                  <ul style="list-style: none; padding: 0; margin: 20px 0; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    ${itemsList}
+                  </ul>
+                  <p style="color: #666;">Please complete these tasks as soon as possible!</p>
+                </div>
+              `,
+            }),
+          });
+
+          const result = await emailResponse.json();
+          console.log(`Overdue reminder sent to ${assigneeProfile.email}:`, result);
+          overdueRemindersSent.push(assigneeProfile.email);
+
+          // Create in-app notification (only once per day, so we check if one was already sent today)
+          const startOfDay = new Date(now);
+          startOfDay.setHours(0, 0, 0, 0);
+
+          const { data: existingNotif } = await supabase
+            .from("notifications")
+            .select("id")
+            .eq("user_id", assigneeId)
+            .eq("type", "overdue_action_items")
+            .gte("created_at", startOfDay.toISOString())
+            .maybeSingle();
+
+          if (!existingNotif) {
+            await supabase.from("notifications").insert({
+              user_id: assigneeId,
+              type: "overdue_action_items",
+              title: "Overdue action items",
+              message: `You have ${items.length} overdue action item${items.length > 1 ? "s" : ""} that need${items.length === 1 ? "s" : ""} attention`,
+              reference_id: items[0].event_id,
+            });
+          }
+
+        } catch (emailError) {
+          console.error(`Failed to send overdue reminder to ${assigneeProfile.email}:`, emailError);
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         eventsProcessed: allEvents.length,
         emailsSent: emailsSent.length,
         actionItemReminders: actionItemRemindersSent.length,
+        overdueReminders: overdueRemindersSent.length,
       }),
       {
         status: 200,
