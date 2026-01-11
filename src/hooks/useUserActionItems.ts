@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 
 export type TaskPriority = "low" | "medium" | "high";
+export type TaskRecurrenceType = "daily" | "weekly" | "monthly" | null;
 
 export interface UserActionItem {
   id: string;
@@ -20,6 +21,8 @@ export interface UserActionItem {
   tags: string[];
   sort_order: number;
   priority: TaskPriority;
+  recurrence_type: TaskRecurrenceType;
+  recurrence_end_date: string | null;
   event_title?: string;
 }
 
@@ -59,6 +62,8 @@ export function useUserActionItems(includeCompleted = false) {
         tags: item.tags || [],
         sort_order: item.sort_order || 0,
         priority: (item.priority as TaskPriority) || "medium",
+        recurrence_type: (item.recurrence_type as TaskRecurrenceType) || null,
+        recurrence_end_date: item.recurrence_end_date || null,
         event_title: eventMap.get(item.event_id) || "Unknown Event",
       })) as UserActionItem[];
     },

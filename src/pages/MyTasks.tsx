@@ -5,7 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useUserActionItems, UserActionItem, TaskPriority } from "@/hooks/useUserActionItems";
+import { useUserActionItems, UserActionItem, TaskPriority, TaskRecurrenceType } from "@/hooks/useUserActionItems";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { 
   ListTodo, Clock, AlertTriangle, CheckCircle2, Search, 
   ArrowUpDown, Trash2, Calendar as CalendarIcon, SortAsc, SortDesc,
-  RotateCcw, Pencil, History, Keyboard, GripVertical, Tag, Flag
+  RotateCcw, Pencil, History, Keyboard, GripVertical, Tag, Flag, Repeat
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isPast, isToday, isTomorrow, parseISO, differenceInDays } from "date-fns";
@@ -72,6 +72,12 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string; bgCo
   high: { label: "High", color: "text-priority-high", bgColor: "bg-priority-high" },
   medium: { label: "Medium", color: "text-priority-medium", bgColor: "bg-priority-medium" },
   low: { label: "Low", color: "text-priority-low", bgColor: "bg-priority-low" },
+};
+
+const RECURRENCE_LABELS: Record<string, string> = {
+  daily: "Repeats daily",
+  weekly: "Repeats weekly",
+  monthly: "Repeats monthly",
 };
 
 export default function MyTasks() {
@@ -1056,6 +1062,14 @@ function SortableTaskItem({
             </TooltipTrigger>
             <TooltipContent>{priorityConfig.label} priority</TooltipContent>
           </Tooltip>
+          {item.recurrence_type && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Repeat className="h-4 w-4 shrink-0 text-primary" />
+              </TooltipTrigger>
+              <TooltipContent>{RECURRENCE_LABELS[item.recurrence_type]}</TooltipContent>
+            </Tooltip>
+          )}
         </div>
         <div className="flex items-center gap-2 mt-2 flex-wrap">
           <Link 
@@ -1077,6 +1091,12 @@ function SortableTaskItem({
           {!item.due_date && (
             <Badge variant="outline" className="text-xs px-2 py-0.5">
               No due date
+            </Badge>
+          )}
+          {item.recurrence_type && (
+            <Badge variant="secondary" className="text-xs px-2 py-0.5 gap-1">
+              <Repeat className="h-3 w-3" />
+              {item.recurrence_type.charAt(0).toUpperCase() + item.recurrence_type.slice(1)}
             </Badge>
           )}
           {item.tags?.map(tag => (
