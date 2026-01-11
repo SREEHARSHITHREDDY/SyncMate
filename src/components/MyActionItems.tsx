@@ -8,14 +8,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { ListTodo, Clock, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { ListTodo, Clock, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isPast, isToday, isTomorrow, parseISO, differenceInDays } from "date-fns";
 import { Link } from "react-router-dom";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export function MyActionItems() {
   const { actionItems, isLoading, overdueCount, dueSoonCount, totalCount } = useUserActionItems();
   const [isExpanded, setIsExpanded] = useState(true);
+  const [filter, setFilter] = useState<"all" | "overdue">("all");
   const [completingId, setCompletingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -68,8 +70,17 @@ export function MyActionItems() {
     return null;
   }
 
+  // Filter items based on selected filter
+  const filteredItems = filter === "overdue" 
+    ? actionItems.filter(item => {
+        if (!item.due_date) return false;
+        const date = parseISO(item.due_date);
+        return isPast(date) && !isToday(date);
+      })
+    : actionItems;
+
   // Sort: overdue first, then by due date, then items without due date
-  const sortedItems = [...actionItems].sort((a, b) => {
+  const sortedItems = [...filteredItems].sort((a, b) => {
     if (!a.due_date && !b.due_date) return 0;
     if (!a.due_date) return 1;
     if (!b.due_date) return -1;
@@ -133,9 +144,42 @@ export function MyActionItems() {
       
       {isExpanded && (
         <CardContent>
+          <div className="flex items-center justify-between mb-3">
+            <ToggleGroup 
+              type="single" 
+              value={filter} 
+              onValueChange={(value) => value && setFilter(value as "all" | "overdue")}
+              className="justify-start"
+            >
+              <ToggleGroupItem value="all" size="sm" className="text-xs gap-1.5 px-3">
+                <ListTodo className="h-3.5 w-3.5" />
+                All ({totalCount})
+              </ToggleGroupItem>
+              <ToggleGroupItem 
+                value="overdue" 
+                size="sm" 
+                className={cn(
+                  "text-xs gap-1.5 px-3",
+                  overdueCount > 0 && "data-[state=on]:bg-destructive data-[state=on]:text-destructive-foreground"
+                )}
+                disabled={overdueCount === 0}
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Overdue ({overdueCount})
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          
           {isLoading ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
               Loading action items...
+            </div>
+          ) : sortedItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+              <CheckCircle2 className="h-8 w-8 mb-2 text-primary/50" />
+              <p className="text-sm">
+                {filter === "overdue" ? "No overdue items!" : "No action items"}
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
