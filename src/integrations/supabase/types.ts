@@ -189,6 +189,47 @@ export type Database = {
         }
         Relationships: []
       }
+      meeting_minute_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number
+          file_type: string
+          id: string
+          minute_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size: number
+          file_type: string
+          id?: string
+          minute_id: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          file_type?: string
+          id?: string
+          minute_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_minute_attachments_minute_id_fkey"
+            columns: ["minute_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_minutes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_minutes: {
         Row: {
           content: string
