@@ -20,10 +20,12 @@ export type Database = {
           content: string
           created_at: string
           created_by: string
+          due_date: string | null
           event_id: string
           id: string
           is_completed: boolean
           minute_id: string
+          reminder_sent: boolean
           updated_at: string
         }
         Insert: {
@@ -31,10 +33,12 @@ export type Database = {
           content: string
           created_at?: string
           created_by: string
+          due_date?: string | null
           event_id: string
           id?: string
           is_completed?: boolean
           minute_id: string
+          reminder_sent?: boolean
           updated_at?: string
         }
         Update: {
@@ -42,10 +46,12 @@ export type Database = {
           content?: string
           created_at?: string
           created_by?: string
+          due_date?: string | null
           event_id?: string
           id?: string
           is_completed?: boolean
           minute_id?: string
+          reminder_sent?: boolean
           updated_at?: string
         }
         Relationships: [
