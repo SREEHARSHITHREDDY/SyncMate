@@ -15,6 +15,7 @@ import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Templates from "./pages/Templates";
+import MyTasks from "./pages/MyTasks";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/settings" element={<Settings />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/templates" element={<Templates />} />
+              <Route path="/my-tasks" element={<MyTasks />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </RealtimeProvider>
