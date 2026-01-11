@@ -18,20 +18,25 @@ export interface UserActionItem {
   event_title?: string;
 }
 
-export function useUserActionItems() {
+export function useUserActionItems(includeCompleted = false) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const actionItemsQuery = useQuery({
-    queryKey: ["user-action-items", user?.id],
+    queryKey: ["user-action-items", user?.id, includeCompleted],
     queryFn: async () => {
       // Get all action items assigned to the current user
-      const { data: actionItems, error } = await supabase
+      let query = supabase
         .from("action_items")
         .select("*")
         .eq("assignee_id", user!.id)
-        .eq("is_completed", false)
         .order("due_date", { ascending: true, nullsFirst: false });
+
+      if (!includeCompleted) {
+        query = query.eq("is_completed", false);
+      }
+
+      const { data: actionItems, error } = await query;
 
       if (error) throw error;
 
@@ -57,7 +62,7 @@ export function useUserActionItems() {
     if (!user) return;
 
     const channel = supabase
-      .channel(`user-action-items-${user.id}`)
+      .channel(`user-action-items-${user.id}-${includeCompleted}`)
       .on(
         "postgres_changes",
         {
@@ -75,14 +80,17 @@ export function useUserActionItems() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, queryClient]);
+  }, [user, queryClient, includeCompleted]);
 
   // Calculate counts
   const items = actionItemsQuery.data || [];
-  const overdueCount = items.filter(
+  const incompleteItems = items.filter(item => !item.is_completed);
+  const completedItems = items.filter(item => item.is_completed);
+  
+  const overdueCount = incompleteItems.filter(
     (item) => item.due_date && new Date(item.due_date) < new Date()
   ).length;
-  const dueSoonCount = items.filter((item) => {
+  const dueSoonCount = incompleteItems.filter((item) => {
     if (!item.due_date) return false;
     const dueDate = new Date(item.due_date);
     const now = new Date();
@@ -91,10 +99,13 @@ export function useUserActionItems() {
   }).length;
 
   return {
-    actionItems: items,
+    actionItems: incompleteItems,
+    completedItems,
+    allItems: items,
     isLoading: actionItemsQuery.isLoading,
     overdueCount,
     dueSoonCount,
-    totalCount: items.length,
+    totalCount: incompleteItems.length,
+    completedCount: completedItems.length,
   };
 }
