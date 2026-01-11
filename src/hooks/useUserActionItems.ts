@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 
+export type TaskPriority = "low" | "medium" | "high";
+
 export interface UserActionItem {
   id: string;
   minute_id: string;
@@ -17,6 +19,7 @@ export interface UserActionItem {
   updated_at: string;
   tags: string[];
   sort_order: number;
+  priority: TaskPriority;
   event_title?: string;
 }
 
@@ -55,6 +58,7 @@ export function useUserActionItems(includeCompleted = false) {
         ...item,
         tags: item.tags || [],
         sort_order: item.sort_order || 0,
+        priority: (item.priority as TaskPriority) || "medium",
         event_title: eventMap.get(item.event_id) || "Unknown Event",
       })) as UserActionItem[];
     },

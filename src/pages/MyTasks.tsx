@@ -5,7 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useUserActionItems, UserActionItem } from "@/hooks/useUserActionItems";
+import { useUserActionItems, UserActionItem, TaskPriority } from "@/hooks/useUserActionItems";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { 
   ListTodo, Clock, AlertTriangle, CheckCircle2, Search, 
   ArrowUpDown, Trash2, Calendar as CalendarIcon, SortAsc, SortDesc,
-  RotateCcw, Pencil, History, Keyboard, GripVertical, Tag
+  RotateCcw, Pencil, History, Keyboard, GripVertical, Tag, Flag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isPast, isToday, isTomorrow, parseISO, differenceInDays } from "date-fns";
@@ -63,14 +63,22 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 type FilterType = "all" | "overdue" | "today" | "upcoming" | "no-date";
-type SortType = "custom" | "due-date" | "created" | "event";
+type PriorityFilterType = "all" | TaskPriority;
+type SortType = "custom" | "due-date" | "created" | "event" | "priority";
 type SortDirection = "asc" | "desc";
 type TabType = "active" | "completed";
+
+const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string; bgColor: string }> = {
+  high: { label: "High", color: "text-priority-high", bgColor: "bg-priority-high" },
+  medium: { label: "Medium", color: "text-priority-medium", bgColor: "bg-priority-medium" },
+  low: { label: "Low", color: "text-priority-low", bgColor: "bg-priority-low" },
+};
 
 export default function MyTasks() {
   const { actionItems, completedItems, allTags, isLoading, overdueCount, totalCount, completedCount } = useUserActionItems(true);
   const [activeTab, setActiveTab] = useState<TabType>("active");
   const [filter, setFilter] = useState<FilterType>("all");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilterType>("all");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortType>("custom");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -143,11 +151,21 @@ export default function MyTasks() {
     };
   };
 
+  // Priority counts
+  const highPriorityCount = actionItems.filter(item => item.priority === "high").length;
+  const mediumPriorityCount = actionItems.filter(item => item.priority === "medium").length;
+  const lowPriorityCount = actionItems.filter(item => item.priority === "low").length;
+
   // Filter items
   const filteredItems = localItems.filter(item => {
     // Search filter
     if (searchQuery && !item.content.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !item.event_title?.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+
+    // Priority filter
+    if (priorityFilter !== "all" && item.priority !== priorityFilter) {
       return false;
     }
 
@@ -183,6 +201,7 @@ export default function MyTasks() {
     ? filteredItems 
     : [...filteredItems].sort((a, b) => {
         let comparison = 0;
+        const priorityOrder: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
         
         switch (sortBy) {
           case "due-date":
@@ -196,6 +215,9 @@ export default function MyTasks() {
             break;
           case "event":
             comparison = (a.event_title || "").localeCompare(b.event_title || "");
+            break;
+          case "priority":
+            comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
             break;
         }
         
@@ -434,6 +456,7 @@ export default function MyTasks() {
   useEffect(() => {
     setSelectedItems(new Set());
     setTagFilter(null);
+    setPriorityFilter("all");
   }, [activeTab]);
 
   return (
@@ -563,6 +586,7 @@ export default function MyTasks() {
                         <SelectContent>
                           <SelectItem value="custom">Custom Order</SelectItem>
                           <SelectItem value="due-date">Due Date</SelectItem>
+                          <SelectItem value="priority">Priority</SelectItem>
                           <SelectItem value="created">Created</SelectItem>
                           <SelectItem value="event">Event</SelectItem>
                         </SelectContent>
@@ -582,6 +606,32 @@ export default function MyTasks() {
                         </Button>
                       )}
                     </div>
+                  </div>
+
+                  {/* Priority Filter */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Flag className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Priority:</span>
+                    <Button
+                      variant={priorityFilter === "all" ? "secondary" : "ghost"}
+                      size="sm"
+                      onClick={() => setPriorityFilter("all")}
+                      className="h-6 text-xs"
+                    >
+                      All
+                    </Button>
+                    {(Object.entries(PRIORITY_CONFIG) as [TaskPriority, typeof PRIORITY_CONFIG[TaskPriority]][]).map(([value, config]) => (
+                      <Button
+                        key={value}
+                        variant={priorityFilter === value ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => setPriorityFilter(priorityFilter === value ? "all" : value)}
+                        className={cn("h-6 text-xs gap-1.5", priorityFilter === value && config.color)}
+                      >
+                        <div className={cn("h-2 w-2 rounded-full", config.bgColor)} />
+                        {config.label} ({value === "high" ? highPriorityCount : value === "medium" ? mediumPriorityCount : lowPriorityCount})
+                      </Button>
+                    ))}
                   </div>
 
                   {/* Tag Filter */}
@@ -960,14 +1010,19 @@ function SortableTaskItem({
 
   const dueDateInfo = getDueDateInfo(item.due_date);
 
+  const priorityConfig = PRIORITY_CONFIG[item.priority];
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
         "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
+        item.priority === "high" && "border-l-4 border-l-priority-high",
+        item.priority === "medium" && "border-l-4 border-l-priority-medium",
+        item.priority === "low" && "border-l-4 border-l-priority-low",
         dueDateInfo?.isOverdue && "border-destructive/50 bg-destructive/5",
-        dueDateInfo?.isToday && "border-primary/50 bg-primary/5",
+        dueDateInfo?.isToday && !dueDateInfo?.isOverdue && "border-primary/50 bg-primary/5",
         isSelected && "ring-2 ring-primary/50",
         isDragging && "opacity-50 shadow-lg",
         "hover:bg-accent/30"
@@ -988,12 +1043,20 @@ function SortableTaskItem({
         className="mt-1"
       />
       <div className="flex-1 min-w-0">
-        <p className={cn(
-          "font-medium leading-tight",
-          isProcessing && "line-through text-muted-foreground"
-        )}>
-          {item.content}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className={cn(
+            "font-medium leading-tight",
+            isProcessing && "line-through text-muted-foreground"
+          )}>
+            {item.content}
+          </p>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Flag className={cn("h-4 w-4 shrink-0", priorityConfig.color)} />
+            </TooltipTrigger>
+            <TooltipContent>{priorityConfig.label} priority</TooltipContent>
+          </Tooltip>
+        </div>
         <div className="flex items-center gap-2 mt-2 flex-wrap">
           <Link 
             to="/calendar" 
