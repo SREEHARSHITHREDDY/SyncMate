@@ -266,11 +266,176 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
+    // ==========================================
+    // ACTION ITEM DUE DATE REMINDERS
+    // ==========================================
+    
+    // Get action items due within the next 24 hours that haven't had reminders sent
+    const { data: upcomingActionItems, error: actionItemsError } = await supabase
+      .from("action_items")
+      .select("*")
+      .eq("is_completed", false)
+      .eq("reminder_sent", false)
+      .not("due_date", "is", null)
+      .lte("due_date", oneDayLater.toISOString())
+      .gte("due_date", now.toISOString());
+
+    if (actionItemsError) {
+      console.error("Error fetching action items:", actionItemsError);
+    }
+
+    const actionItemRemindersSent: string[] = [];
+
+    if (upcomingActionItems && upcomingActionItems.length > 0) {
+      for (const actionItem of upcomingActionItems) {
+        // Only send to assignee if there is one
+        if (!actionItem.assignee_id) continue;
+
+        // Get assignee's profile
+        const { data: assigneeProfile } = await supabase
+          .from("profiles")
+          .select("email, name, user_id")
+          .eq("user_id", actionItem.assignee_id)
+          .maybeSingle();
+
+        if (!assigneeProfile?.email) continue;
+
+        // Get user's notification preferences
+        const { data: prefs } = await supabase
+          .from("notification_preferences")
+          .select("*")
+          .eq("user_id", actionItem.assignee_id)
+          .maybeSingle();
+
+        const emailEnabled = prefs?.email_enabled ?? true;
+
+        if (!emailEnabled) {
+          console.log(`Skipping action item reminder for ${assigneeProfile.email}: email disabled`);
+          continue;
+        }
+
+        // Get event title for context
+        const { data: event } = await supabase
+          .from("events")
+          .select("title")
+          .eq("id", actionItem.event_id)
+          .single();
+
+        const eventTitle = event?.title || "an event";
+        const dueDate = new Date(actionItem.due_date);
+        const formattedDueDate = dueDate.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+
+        // Calculate time until due
+        const hoursUntilDue = Math.round((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60));
+        let timeUntilDue = "";
+        if (hoursUntilDue <= 1) {
+          timeUntilDue = "less than an hour";
+        } else if (hoursUntilDue < 24) {
+          timeUntilDue = `${hoursUntilDue} hours`;
+        } else {
+          timeUntilDue = "tomorrow";
+        }
+
+        try {
+          // Send email reminder
+          const emailResponse = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${RESEND_API_KEY}`,
+            },
+            body: JSON.stringify({
+              from: "Action Item Reminder <onboarding@resend.dev>",
+              to: [assigneeProfile.email],
+              subject: `⏰ Action item due in ${timeUntilDue}: ${escapeHtml(actionItem.content.substring(0, 50))}`,
+              html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h1 style="color: #333;">Action Item Reminder</h1>
+                  <p>Hi ${escapeHtml(assigneeProfile.name || "there")}!</p>
+                  <p>You have an action item due in <strong>${timeUntilDue}</strong>:</p>
+                  <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                    <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">📋 ${escapeHtml(actionItem.content)}</p>
+                    <p style="margin: 0; color: #666; font-size: 14px;">
+                      From meeting: ${escapeHtml(eventTitle)}
+                    </p>
+                    <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">
+                      📅 Due: ${formattedDueDate}
+                    </p>
+                  </div>
+                  <p style="color: #666;">Don't forget to complete this task!</p>
+                </div>
+              `,
+            }),
+          });
+
+          const result = await emailResponse.json();
+          console.log(`Action item reminder sent to ${assigneeProfile.email}:`, result);
+          actionItemRemindersSent.push(assigneeProfile.email);
+
+          // Mark reminder as sent
+          await supabase
+            .from("action_items")
+            .update({ reminder_sent: true })
+            .eq("id", actionItem.id);
+
+          // Create in-app notification
+          await supabase.from("notifications").insert({
+            user_id: actionItem.assignee_id,
+            type: "action_item_reminder",
+            title: "Action item due soon",
+            message: `"${actionItem.content.substring(0, 50)}${actionItem.content.length > 50 ? "..." : ""}" is due in ${timeUntilDue}`,
+            reference_id: actionItem.event_id,
+          });
+
+        } catch (emailError) {
+          console.error(`Failed to send action item reminder to ${assigneeProfile.email}:`, emailError);
+        }
+
+        // Send push notification
+        try {
+          const { data: pushSubs } = await supabase
+            .from("push_subscriptions")
+            .select("*")
+            .eq("user_id", actionItem.assignee_id);
+
+          if (pushSubs && pushSubs.length > 0) {
+            for (const sub of pushSubs) {
+              try {
+                await fetch(sub.endpoint, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'TTL': '86400',
+                  },
+                  body: JSON.stringify({
+                    title: `Action item due in ${timeUntilDue}`,
+                    body: actionItem.content.substring(0, 100),
+                    url: '/dashboard',
+                  }),
+                });
+                console.log(`Action item push sent to ${assigneeProfile.email}`);
+              } catch (pushError) {
+                console.error(`Action item push failed for ${assigneeProfile.email}:`, pushError);
+              }
+            }
+          }
+        } catch (pushError) {
+          console.error(`Failed to send action item push to ${assigneeProfile.email}:`, pushError);
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         eventsProcessed: allEvents.length,
         emailsSent: emailsSent.length,
+        actionItemReminders: actionItemRemindersSent.length,
       }),
       {
         status: 200,

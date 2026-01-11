@@ -11,6 +11,8 @@ export interface ActionItem {
   content: string;
   assignee_id: string | null;
   is_completed: boolean;
+  due_date: string | null;
+  reminder_sent: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -70,10 +72,12 @@ export function useActionItems(eventId: string, minuteId?: string) {
       minuteId,
       content,
       assigneeId,
+      dueDate,
     }: {
       minuteId: string;
       content: string;
       assigneeId?: string;
+      dueDate?: string;
     }) => {
       const { data, error } = await supabase
         .from("action_items")
@@ -82,6 +86,7 @@ export function useActionItems(eventId: string, minuteId?: string) {
           event_id: eventId,
           content,
           assignee_id: assigneeId || null,
+          due_date: dueDate || null,
           created_by: user!.id,
         })
         .select()
@@ -103,11 +108,17 @@ export function useActionItems(eventId: string, minuteId?: string) {
           .eq("user_id", user!.id)
           .single();
 
+        let message = `${creatorProfile?.name || "Someone"} assigned you an action item in "${event?.title || "an event"}"`;
+        if (dueDate) {
+          const formattedDate = new Date(dueDate).toLocaleDateString();
+          message += ` (due ${formattedDate})`;
+        }
+
         await supabase.from("notifications").insert({
           user_id: assigneeId,
           type: "action_item",
           title: "New action item assigned",
-          message: `${creatorProfile?.name || "Someone"} assigned you an action item in "${event?.title || "an event"}"`,
+          message,
           reference_id: eventId,
         });
       }
@@ -151,14 +162,21 @@ export function useActionItems(eventId: string, minuteId?: string) {
       id,
       content,
       assigneeId,
+      dueDate,
     }: {
       id: string;
       content?: string;
       assigneeId?: string | null;
+      dueDate?: string | null;
     }) => {
-      const updates: Partial<ActionItem> = {};
+      const updates: Record<string, any> = {};
       if (content !== undefined) updates.content = content;
       if (assigneeId !== undefined) updates.assignee_id = assigneeId;
+      if (dueDate !== undefined) {
+        updates.due_date = dueDate;
+        // Reset reminder_sent when due date changes
+        updates.reminder_sent = false;
+      }
 
       const { error } = await supabase
         .from("action_items")
