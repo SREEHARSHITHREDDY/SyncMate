@@ -14,13 +14,21 @@ import { format, isPast, isToday, isTomorrow, parseISO, differenceInDays } from 
 import { Link } from "react-router-dom";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
+type FilterType = "all" | "overdue" | "today";
+
 export function MyActionItems() {
   const { actionItems, isLoading, overdueCount, dueSoonCount, totalCount } = useUserActionItems();
   const [isExpanded, setIsExpanded] = useState(true);
-  const [filter, setFilter] = useState<"all" | "overdue">("all");
+  const [filter, setFilter] = useState<FilterType>("all");
   const [completingId, setCompletingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { user } = useAuth();
+
+  // Calculate due today count
+  const dueTodayCount = actionItems.filter(item => {
+    if (!item.due_date) return false;
+    return isToday(parseISO(item.due_date));
+  }).length;
 
   const handleToggleComplete = async (item: UserActionItem) => {
     setCompletingId(item.id);
@@ -71,13 +79,18 @@ export function MyActionItems() {
   }
 
   // Filter items based on selected filter
-  const filteredItems = filter === "overdue" 
-    ? actionItems.filter(item => {
-        if (!item.due_date) return false;
-        const date = parseISO(item.due_date);
-        return isPast(date) && !isToday(date);
-      })
-    : actionItems;
+  const filteredItems = actionItems.filter(item => {
+    if (filter === "overdue") {
+      if (!item.due_date) return false;
+      const date = parseISO(item.due_date);
+      return isPast(date) && !isToday(date);
+    }
+    if (filter === "today") {
+      if (!item.due_date) return false;
+      return isToday(parseISO(item.due_date));
+    }
+    return true;
+  });
 
   // Sort: overdue first, then by due date, then items without due date
   const sortedItems = [...filteredItems].sort((a, b) => {
@@ -97,7 +110,9 @@ export function MyActionItems() {
             </div>
             <div>
               <CardTitle className="flex items-center gap-2">
-                My Action Items
+                <Link to="/my-tasks" className="hover:text-primary transition-colors">
+                  My Action Items
+                </Link>
                 <Badge variant="secondary" className="ml-1">
                   {totalCount}
                 </Badge>
@@ -148,8 +163,8 @@ export function MyActionItems() {
             <ToggleGroup 
               type="single" 
               value={filter} 
-              onValueChange={(value) => value && setFilter(value as "all" | "overdue")}
-              className="justify-start"
+              onValueChange={(value) => value && setFilter(value as FilterType)}
+              className="justify-start flex-wrap"
             >
               <ToggleGroupItem value="all" size="sm" className="text-xs gap-1.5 px-3">
                 <ListTodo className="h-3.5 w-3.5" />
@@ -167,7 +182,21 @@ export function MyActionItems() {
                 <AlertTriangle className="h-3.5 w-3.5" />
                 Overdue ({overdueCount})
               </ToggleGroupItem>
+              <ToggleGroupItem 
+                value="today" 
+                size="sm" 
+                className="text-xs gap-1.5 px-3"
+                disabled={dueTodayCount === 0}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Today ({dueTodayCount})
+              </ToggleGroupItem>
             </ToggleGroup>
+            <Link to="/my-tasks">
+              <Button variant="ghost" size="sm" className="text-xs">
+                View All
+              </Button>
+            </Link>
           </div>
           
           {isLoading ? (
@@ -178,7 +207,8 @@ export function MyActionItems() {
             <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
               <CheckCircle2 className="h-8 w-8 mb-2 text-primary/50" />
               <p className="text-sm">
-                {filter === "overdue" ? "No overdue items!" : "No action items"}
+                {filter === "overdue" ? "No overdue items!" : 
+                 filter === "today" ? "Nothing due today!" : "No action items"}
               </p>
             </div>
           ) : (
