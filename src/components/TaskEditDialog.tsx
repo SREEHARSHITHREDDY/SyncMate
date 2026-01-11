@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { Calendar as CalendarIcon, Save, X, Flag } from "lucide-react";
+import { Calendar as CalendarIcon, Save, X, Flag, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
@@ -30,7 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { UserActionItem, TaskPriority } from "@/hooks/useUserActionItems";
+import { UserActionItem, TaskPriority, TaskRecurrenceType } from "@/hooks/useUserActionItems";
 import { TagInput } from "@/components/TagInput";
 
 interface TaskEditDialogProps {
@@ -46,6 +46,13 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string }> = 
   high: { label: "High", color: "text-priority-high" },
 };
 
+const RECURRENCE_OPTIONS: { value: TaskRecurrenceType | "none"; label: string }[] = [
+  { value: "none", label: "No repeat" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+];
+
 export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskEditDialogProps) {
   const [content, setContent] = useState(item?.content || "");
   const [dueDate, setDueDate] = useState<Date | undefined>(
@@ -53,6 +60,12 @@ export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskE
   );
   const [tags, setTags] = useState<string[]>(item?.tags || []);
   const [priority, setPriority] = useState<TaskPriority>(item?.priority || "medium");
+  const [recurrenceType, setRecurrenceType] = useState<TaskRecurrenceType | "none">(
+    item?.recurrence_type || "none"
+  );
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>(
+    item?.recurrence_end_date ? parseISO(item.recurrence_end_date) : undefined
+  );
   const [isSaving, setIsSaving] = useState(false);
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -64,6 +77,8 @@ export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskE
       setDueDate(item.due_date ? parseISO(item.due_date) : undefined);
       setTags(item.tags || []);
       setPriority(item.priority || "medium");
+      setRecurrenceType(item.recurrence_type || "none");
+      setRecurrenceEndDate(item.recurrence_end_date ? parseISO(item.recurrence_end_date) : undefined);
     }
   }, [open, item]);
 
@@ -82,6 +97,10 @@ export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskE
           due_date: dueDate ? dueDate.toISOString() : null,
           tags: tags,
           priority: priority,
+          recurrence_type: recurrenceType === "none" ? null : recurrenceType,
+          recurrence_end_date: recurrenceType !== "none" && recurrenceEndDate 
+            ? recurrenceEndDate.toISOString().split('T')[0] 
+            : null,
           reminder_sent: dueDate && item.due_date !== dueDate.toISOString() ? false : item.reminder_sent,
         })
         .eq("id", item.id);
@@ -179,7 +198,62 @@ export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskE
                   </SelectItem>
                 ))}
               </SelectContent>
-            </Select>
+          </Select>
+          </div>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Repeat className="h-4 w-4 text-muted-foreground" />
+                Repeat
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {RECURRENCE_OPTIONS.map((option) => (
+                  <Button
+                    key={option.value || "none"}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "capitalize",
+                      recurrenceType === option.value && "border-primary bg-primary/5 text-primary"
+                    )}
+                    onClick={() => setRecurrenceType(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {recurrenceType !== "none" && recurrenceType !== null && (
+              <div className="space-y-2">
+                <Label>Repeat until (optional)</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !recurrenceEndDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {recurrenceEndDate ? format(recurrenceEndDate, "PPP") : "No end date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={recurrenceEndDate}
+                      onSelect={setRecurrenceEndDate}
+                      disabled={(d) => d < new Date()}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Tags</Label>

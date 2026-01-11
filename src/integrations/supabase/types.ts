@@ -26,6 +26,8 @@ export type Database = {
           is_completed: boolean
           minute_id: string
           priority: string
+          recurrence_end_date: string | null
+          recurrence_type: string | null
           reminder_sent: boolean
           sort_order: number | null
           tags: string[] | null
@@ -42,6 +44,8 @@ export type Database = {
           is_completed?: boolean
           minute_id: string
           priority?: string
+          recurrence_end_date?: string | null
+          recurrence_type?: string | null
           reminder_sent?: boolean
           sort_order?: number | null
           tags?: string[] | null
@@ -58,6 +62,8 @@ export type Database = {
           is_completed?: boolean
           minute_id?: string
           priority?: string
+          recurrence_end_date?: string | null
+          recurrence_type?: string | null
           reminder_sent?: boolean
           sort_order?: number | null
           tags?: string[] | null
