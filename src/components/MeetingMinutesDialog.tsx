@@ -13,6 +13,7 @@ import { useMeetingAttachments } from "@/hooks/useMeetingAttachments";
 import { Loader2, FileText, Trash2, Plus, Download, Mail } from "lucide-react";
 import { MeetingAttachments } from "@/components/MeetingAttachments";
 import { CollaborativeEditor } from "@/components/CollaborativeEditor";
+import { MentionText } from "@/components/MentionText";
 import { format, parseISO } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -55,6 +56,7 @@ export function MeetingMinutesDialog({
     useMeetingMinutes(eventId);
 
   const [content, setContent] = useState("");
+  const [previousContent, setPreviousContent] = useState<string | undefined>(undefined);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export function MeetingMinutesDialog({
   useEffect(() => {
     if (open) {
       setContent("");
+      setPreviousContent(undefined);
       setEditingId(null);
       setIsEditing(false);
     }
@@ -71,10 +74,15 @@ export function MeetingMinutesDialog({
   const handleSave = () => {
     if (!content.trim()) return;
     saveMinutes(
-      { content: content.trim(), minuteId: editingId || undefined },
+      { 
+        content: content.trim(), 
+        minuteId: editingId || undefined,
+        previousContent 
+      },
       {
         onSuccess: () => {
           setContent("");
+          setPreviousContent(undefined);
           setEditingId(null);
           setIsEditing(false);
         },
@@ -85,6 +93,7 @@ export function MeetingMinutesDialog({
   const handleEdit = (minute: { id: string; content: string }) => {
     setEditingId(minute.id);
     setContent(minute.content);
+    setPreviousContent(minute.content);
     setIsEditing(true);
   };
 
@@ -98,6 +107,7 @@ export function MeetingMinutesDialog({
 
   const handleCancel = () => {
     setContent("");
+    setPreviousContent(undefined);
     setEditingId(null);
     setIsEditing(false);
   };
@@ -420,7 +430,7 @@ export function MeetingMinutesDialog({
                           )}
                         </div>
                         <div className="text-sm whitespace-pre-wrap mb-3">
-                          {minute.content}
+                          <MentionText content={minute.content} />
                         </div>
                         <MeetingAttachments minuteId={minute.id} canEdit={canEdit} />
                       </div>

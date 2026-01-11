@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { extractMentions } from "@/hooks/useEventParticipants";
 
 export interface MeetingMinute {
   id: string;
@@ -31,8 +32,64 @@ export function useMeetingMinutes(eventId: string) {
     enabled: !!eventId && !!user,
   });
 
+  // Get event title for notifications
+  const getEventTitle = async () => {
+    const { data } = await supabase
+      .from("events")
+      .select("title")
+      .eq("id", eventId)
+      .single();
+    return data?.title || "an event";
+  };
+
+  // Create notifications for mentioned users
+  const createMentionNotifications = async (
+    content: string,
+    previousContent?: string
+  ) => {
+    const currentMentions = extractMentions(content);
+    const previousMentions = previousContent ? extractMentions(previousContent) : [];
+    
+    // Only notify for new mentions (not already in previous content)
+    const newMentions = currentMentions.filter(
+      (userId) => !previousMentions.includes(userId) && userId !== user?.id
+    );
+
+    if (newMentions.length === 0) return;
+
+    const eventTitle = await getEventTitle();
+
+    // Get the mentioner's name
+    const { data: mentionerProfile } = await supabase
+      .from("profiles")
+      .select("name")
+      .eq("user_id", user!.id)
+      .single();
+
+    const mentionerName = mentionerProfile?.name || "Someone";
+
+    // Create notifications for each mentioned user
+    for (const mentionedUserId of newMentions) {
+      await supabase.from("notifications").insert({
+        user_id: mentionedUserId,
+        type: "mention",
+        title: "You were mentioned",
+        message: `${mentionerName} mentioned you in meeting minutes for "${eventTitle}"`,
+        reference_id: eventId,
+      });
+    }
+  };
+
   const saveMutation = useMutation({
-    mutationFn: async ({ content, minuteId }: { content: string; minuteId?: string }) => {
+    mutationFn: async ({ 
+      content, 
+      minuteId,
+      previousContent 
+    }: { 
+      content: string; 
+      minuteId?: string;
+      previousContent?: string;
+    }) => {
       if (minuteId) {
         // Update existing
         const { error } = await supabase
@@ -51,6 +108,9 @@ export function useMeetingMinutes(eventId: string) {
           });
         if (error) throw error;
       }
+
+      // Create notifications for @mentions
+      await createMentionNotifications(content, previousContent);
     },
     onSuccess: () => {
       toast.success("Meeting minutes saved");
