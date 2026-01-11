@@ -1,12 +1,13 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Users, Bell, Clock, ArrowRight } from "lucide-react";
+import { Calendar, Users, Bell, Clock, ArrowRight, ListTodo } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useFriends } from "@/hooks/useFriends";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useUserActionItems } from "@/hooks/useUserActionItems";
 import { Button } from "@/components/ui/button";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import { EventInviteCard } from "@/components/EventInviteCard";
@@ -15,6 +16,7 @@ import { EditEventDialog } from "@/components/EditEventDialog";
 import { PriorityFilter } from "@/components/PriorityFilter";
 import { CompletedFilter } from "@/components/CompletedFilter";
 import { CancelOccurrenceDialog } from "@/components/CancelOccurrenceDialog";
+import { MyActionItems } from "@/components/MyActionItems";
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -29,6 +31,7 @@ export default function Dashboard() {
   const { pendingRequests } = useFriends();
   const { events, pendingInvites } = useEvents();
   const { unreadCount } = useNotifications();
+  const { totalCount: actionItemCount, overdueCount: overdueActionItems } = useUserActionItems();
   const [editingEvent, setEditingEvent] = useState<EventWithResponse | null>(null);
   const [cancellingEvent, setCancellingEvent] = useState<EventWithResponse | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high">("all");
@@ -132,6 +135,21 @@ export default function Dashboard() {
           <Card className="card-hover animate-fade-in" style={{ animationDelay: '0.2s' }}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
+                Action Items
+              </CardTitle>
+              <ListTodo className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{actionItemCount}</div>
+              <p className="text-xs text-muted-foreground">
+                {overdueActionItems > 0 ? `${overdueActionItems} overdue` : "Assigned to you"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="card-hover animate-fade-in" style={{ animationDelay: '0.25s' }}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
                 Completed
               </CardTitle>
               <Bell className="h-4 w-4 text-primary" />
@@ -142,7 +160,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="card-hover animate-fade-in" style={{ animationDelay: '0.25s' }}>
+          <Card className="card-hover animate-fade-in" style={{ animationDelay: '0.3s' }}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Next Event
@@ -156,6 +174,11 @@ export default function Dashboard() {
               </p>
             </CardContent>
           </Card>
+        </div>
+
+        {/* My Action Items */}
+        <div className="mb-6">
+          <MyActionItems />
         </div>
 
         {/* Upcoming Events */}
