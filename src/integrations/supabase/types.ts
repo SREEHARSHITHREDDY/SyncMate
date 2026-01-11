@@ -25,6 +25,7 @@ export type Database = {
           id: string
           is_completed: boolean
           minute_id: string
+          priority: string
           reminder_sent: boolean
           sort_order: number | null
           tags: string[] | null
@@ -40,6 +41,7 @@ export type Database = {
           id?: string
           is_completed?: boolean
           minute_id: string
+          priority?: string
           reminder_sent?: boolean
           sort_order?: number | null
           tags?: string[] | null
@@ -55,6 +57,7 @@ export type Database = {
           id?: string
           is_completed?: boolean
           minute_id?: string
+          priority?: string
           reminder_sent?: boolean
           sort_order?: number | null
           tags?: string[] | null

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { Calendar as CalendarIcon, Save, X } from "lucide-react";
+import { Calendar as CalendarIcon, Save, X, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,13 +17,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { UserActionItem } from "@/hooks/useUserActionItems";
+import { UserActionItem, TaskPriority } from "@/hooks/useUserActionItems";
 import { TagInput } from "@/components/TagInput";
 
 interface TaskEditDialogProps {
@@ -33,12 +40,19 @@ interface TaskEditDialogProps {
   allTags?: string[];
 }
 
+const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string }> = {
+  low: { label: "Low", color: "text-priority-low" },
+  medium: { label: "Medium", color: "text-priority-medium" },
+  high: { label: "High", color: "text-priority-high" },
+};
+
 export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskEditDialogProps) {
   const [content, setContent] = useState(item?.content || "");
   const [dueDate, setDueDate] = useState<Date | undefined>(
     item?.due_date ? parseISO(item.due_date) : undefined
   );
   const [tags, setTags] = useState<string[]>(item?.tags || []);
+  const [priority, setPriority] = useState<TaskPriority>(item?.priority || "medium");
   const [isSaving, setIsSaving] = useState(false);
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -49,6 +63,7 @@ export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskE
       setContent(item.content);
       setDueDate(item.due_date ? parseISO(item.due_date) : undefined);
       setTags(item.tags || []);
+      setPriority(item.priority || "medium");
     }
   }, [open, item]);
 
@@ -66,6 +81,7 @@ export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskE
           content: content.trim(),
           due_date: dueDate ? dueDate.toISOString() : null,
           tags: tags,
+          priority: priority,
           reminder_sent: dueDate && item.due_date !== dueDate.toISOString() ? false : item.reminder_sent,
         })
         .eq("id", item.id);
@@ -146,6 +162,24 @@ export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskE
                 </Button>
               )}
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Priority</Label>
+            <Select value={priority} onValueChange={(value) => setPriority(value as TaskPriority)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.entries(PRIORITY_CONFIG) as [TaskPriority, typeof PRIORITY_CONFIG[TaskPriority]][]).map(([value, config]) => (
+                  <SelectItem key={value} value={value}>
+                    <div className="flex items-center gap-2">
+                      <Flag className={cn("h-4 w-4", config.color)} />
+                      {config.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>Tags</Label>
