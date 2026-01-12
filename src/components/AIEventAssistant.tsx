@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX, Clock, Plus, Trash2, Radio, LogOut } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX, Clock, Plus, Trash2, Radio, LogOut, Ear, EarOff } from "lucide-react";
 import { useAIEventAssistant } from "@/hooks/useAIEventAssistant";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { cn } from "@/lib/utils";
@@ -49,10 +49,16 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [handsFreeMode, setHandsFreeMode] = useState(false);
   const recognitionRef = useRef<typeof window.SpeechRecognition.prototype | null>(null);
+  const wakeWordRecognitionRef = useRef<typeof window.SpeechRecognition.prototype | null>(null);
   const { speak, stop, isSpeaking, isSupported: ttsSupported } = useTextToSpeech();
   const [suggestionSeed, setSuggestionSeed] = useState(0);
   const pendingSubmitRef = useRef<string | null>(null);
   const handsFreeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Wake word detection state
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
+  const [wakeWordListening, setWakeWordListening] = useState(false);
+  const wakeWordRestartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Voice confirmation states
   const [pendingEventConfirmation, setPendingEventConfirmation] = useState<{
@@ -273,6 +279,144 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
       recognition.abort();
     };
   }, [speechSupported, handsFreeMode, isLoading, isSpeaking, sendMessage, startListening, confirmationMode, handleVoiceConfirmation]);
+
+  // Wake word detection - "Hey Buddy"
+  const startWakeWordListening = useCallback(() => {
+    if (!wakeWordRecognitionRef.current || handsFreeMode || isListening) return;
+    
+    try {
+      wakeWordRecognitionRef.current.start();
+      setWakeWordListening(true);
+    } catch (error) {
+      console.error('Failed to start wake word listening:', error);
+    }
+  }, [handsFreeMode, isListening]);
+
+  const stopWakeWordListening = useCallback(() => {
+    if (!wakeWordRecognitionRef.current) return;
+    
+    try {
+      wakeWordRecognitionRef.current.stop();
+    } catch (error) {
+      console.error('Failed to stop wake word listening:', error);
+    }
+    setWakeWordListening(false);
+  }, []);
+
+  // Initialize wake word recognition
+  useEffect(() => {
+    if (!speechSupported || !wakeWordEnabled) return;
+
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const wakeRecognition = new SpeechRecognitionAPI();
+    wakeRecognition.continuous = true;
+    wakeRecognition.interimResults = true;
+    wakeRecognition.lang = 'en-US';
+
+    const wakeWords = ["hey buddy", "hey body", "hey buddie", "hey buddies", "a buddy", "hey baddie", "hey budy"];
+
+    wakeRecognition.onresult = (event: any) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript.toLowerCase().trim();
+        
+        // Check for wake word match
+        const hasWakeWord = wakeWords.some(phrase => transcript.includes(phrase));
+        
+        if (hasWakeWord) {
+          // Wake word detected! Open assistant and enable hands-free mode
+          console.log('Wake word detected:', transcript);
+          
+          // Stop wake word listening
+          stopWakeWordListening();
+          
+          // Open assistant if not already open
+          if (!open) {
+            onOpenChange(true);
+          }
+          
+          // Enable hands-free mode after a short delay
+          setTimeout(() => {
+            setHandsFreeMode(true);
+            setVoiceEnabled(true);
+            speak("Hey! I'm listening. What would you like to schedule?");
+            toast.success("Hey Buddy! I'm listening...");
+          }, 300);
+          
+          return;
+        }
+      }
+    };
+
+    wakeRecognition.onerror = (event: any) => {
+      console.error('Wake word recognition error:', event.error);
+      setWakeWordListening(false);
+      
+      // Don't show errors for no-speech or aborted
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        if (event.error === 'not-allowed') {
+          toast.error('Microphone access denied for wake word detection.');
+          setWakeWordEnabled(false);
+        }
+      }
+    };
+
+    wakeRecognition.onend = () => {
+      setWakeWordListening(false);
+      
+      // Restart wake word listening if still enabled and not in other modes
+      if (wakeWordEnabled && !handsFreeMode && !isListening && !open) {
+        wakeWordRestartTimeoutRef.current = setTimeout(() => {
+          if (wakeWordEnabled && !handsFreeMode && !isListening) {
+            startWakeWordListening();
+          }
+        }, 500);
+      }
+    };
+
+    wakeWordRecognitionRef.current = wakeRecognition;
+
+    // Start listening for wake word
+    startWakeWordListening();
+
+    return () => {
+      if (wakeWordRestartTimeoutRef.current) {
+        clearTimeout(wakeWordRestartTimeoutRef.current);
+      }
+      wakeRecognition.abort();
+    };
+  }, [speechSupported, wakeWordEnabled, handsFreeMode, isListening, open, onOpenChange, speak, stopWakeWordListening, startWakeWordListening]);
+
+  // Resume wake word listening when assistant closes
+  useEffect(() => {
+    if (!open && wakeWordEnabled && !wakeWordListening && !handsFreeMode) {
+      // Restart wake word detection after closing assistant
+      wakeWordRestartTimeoutRef.current = setTimeout(() => {
+        startWakeWordListening();
+      }, 1000);
+    }
+    
+    return () => {
+      if (wakeWordRestartTimeoutRef.current) {
+        clearTimeout(wakeWordRestartTimeoutRef.current);
+      }
+    };
+  }, [open, wakeWordEnabled, wakeWordListening, handsFreeMode, startWakeWordListening]);
+
+  // Toggle wake word detection
+  const toggleWakeWordDetection = useCallback(() => {
+    if (wakeWordEnabled) {
+      setWakeWordEnabled(false);
+      stopWakeWordListening();
+      toast.info("Wake word detection disabled");
+    } else {
+      if (!speechSupported) {
+        toast.error("Speech recognition not supported in your browser");
+        return;
+      }
+      setWakeWordEnabled(true);
+      toast.success("Wake word detection enabled! Say 'Hey Buddy' to activate");
+    }
+  }, [wakeWordEnabled, speechSupported, stopWakeWordListening]);
 
   // Restart listening after TTS finishes speaking (hands-free mode)
   useEffect(() => {
@@ -544,11 +688,47 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
               
               {/* Hands-free mode info */}
               {speechSupported && (
-                <div className="mt-6 p-3 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-xs font-medium text-primary mb-1">🎤 Hands-Free Mode</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    Click the radio button below to enable continuous voice conversation
-                  </p>
+                <div className="mt-6 space-y-3">
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                    <p className="text-xs font-medium text-primary mb-1">🎤 Hands-Free Mode</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Click the radio button below to enable continuous voice conversation
+                    </p>
+                  </div>
+                  
+                  <div className={cn(
+                    "p-3 rounded-lg border transition-colors",
+                    wakeWordEnabled 
+                      ? "bg-success/10 border-success/30" 
+                      : "bg-secondary/50 border-secondary"
+                  )}>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-medium flex items-center gap-1">
+                        <Ear className="h-3 w-3" />
+                        Wake Word Detection
+                      </p>
+                      <Button
+                        variant={wakeWordEnabled ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "h-6 text-[10px] px-2",
+                          wakeWordEnabled && "bg-success hover:bg-success/90"
+                        )}
+                        onClick={toggleWakeWordDetection}
+                      >
+                        {wakeWordEnabled ? "On" : "Off"}
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Say <strong>"Hey Buddy"</strong> anytime to activate the assistant
+                    </p>
+                    {wakeWordEnabled && wakeWordListening && (
+                      <div className="flex items-center gap-1 mt-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                        <span className="text-[10px] text-success font-medium">Listening for wake word...</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
               
@@ -738,6 +918,26 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
               title={handsFreeMode ? "Disable hands-free mode" : "Enable hands-free mode"}
             >
               <Radio className={cn("h-4 w-4", handsFreeMode && "animate-pulse")} />
+            </Button>
+          )}
+          
+          {/* Wake word toggle button */}
+          {speechSupported && !handsFreeMode && (
+            <Button
+              type="button"
+              size="icon"
+              variant={wakeWordEnabled ? "default" : "outline"}
+              onClick={toggleWakeWordDetection}
+              className={cn(
+                wakeWordEnabled && "bg-success hover:bg-success/90"
+              )}
+              title={wakeWordEnabled ? "Disable wake word detection ('Hey Buddy')" : "Enable wake word detection ('Hey Buddy')"}
+            >
+              {wakeWordEnabled ? (
+                <Ear className={cn("h-4 w-4", wakeWordListening && "animate-pulse")} />
+              ) : (
+                <EarOff className="h-4 w-4" />
+              )}
             </Button>
           )}
           
