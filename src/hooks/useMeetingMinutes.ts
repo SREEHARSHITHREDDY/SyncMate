@@ -32,17 +32,8 @@ export function useMeetingMinutes(eventId: string) {
     enabled: !!eventId && !!user,
   });
 
-  // Get event title for notifications
-  const getEventTitle = async () => {
-    const { data } = await supabase
-      .from("events")
-      .select("title")
-      .eq("id", eventId)
-      .single();
-    return data?.title || "an event";
-  };
 
-  // Create notifications for mentioned users
+  // Create notifications for mentioned users using secure RPC function
   const createMentionNotifications = async (
     content: string,
     previousContent?: string
@@ -57,27 +48,11 @@ export function useMeetingMinutes(eventId: string) {
 
     if (newMentions.length === 0) return;
 
-    const eventTitle = await getEventTitle();
-
-    // Get the mentioner's name
-    const { data: mentionerProfile } = await supabase
-      .from("profiles")
-      .select("name")
-      .eq("user_id", user!.id)
-      .single();
-
-    const mentionerName = mentionerProfile?.name || "Someone";
-
-    // Create notifications for each mentioned user
-    for (const mentionedUserId of newMentions) {
-      await supabase.from("notifications").insert({
-        user_id: mentionedUserId,
-        type: "mention",
-        title: "You were mentioned",
-        message: `${mentionerName} mentioned you in meeting minutes for "${eventTitle}"`,
-        reference_id: eventId,
-      });
-    }
+    // Use secure RPC function to create notifications
+    await supabase.rpc('create_mention_notification', {
+      p_event_id: eventId,
+      p_mentioned_user_ids: newMentions,
+    });
   };
 
   const saveMutation = useMutation({
