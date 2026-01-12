@@ -152,6 +152,7 @@ export type Database = {
       }
       event_templates: {
         Row: {
+          category: string | null
           created_at: string
           default_time: string
           description: string | null
@@ -164,6 +165,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           default_time?: string
           description?: string | null
@@ -176,6 +178,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           default_time?: string
           description?: string | null
@@ -191,6 +194,7 @@ export type Database = {
       }
       events: {
         Row: {
+          category: string | null
           created_at: string
           creator_id: string
           description: string | null
@@ -205,6 +209,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           creator_id: string
           description?: string | null
@@ -219,6 +224,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           creator_id?: string
           description?: string | null

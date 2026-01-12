@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Users, Flag, ArrowRight, Check, Loader2 } from "lucide-react";
+import { Calendar, Clock, Users, Flag, ArrowRight, Check, Loader2, Tag } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { RecurrenceSelect, RecurrenceType } from "@/components/RecurrenceSelect";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CATEGORY_COLORS, CategoryType } from "@/lib/eventCategories";
 
 type Priority = "low" | "medium" | "high";
 
@@ -36,6 +38,7 @@ export default function CreateEvent() {
   const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>();
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [category, setCategory] = useState<CategoryType>("default");
 
   // Pre-fill from template params
   useEffect(() => {
@@ -105,6 +108,7 @@ export default function CreateEvent() {
           priority,
           recurrence_type: recurrenceType === "none" ? null : recurrenceType,
           recurrence_end_date: recurrenceEndDate ? format(recurrenceEndDate, "yyyy-MM-dd") : null,
+          category,
         })
         .select()
         .single();
@@ -244,6 +248,29 @@ export default function CreateEvent() {
                   </Button>
                 ))}
               </div>
+            </div>
+
+            {/* Category */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Tag className="h-4 w-4 text-muted-foreground" />
+                Category
+              </Label>
+              <Select value={category} onValueChange={(v) => setCategory(v as CategoryType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(CATEGORY_COLORS).map(([key, { label, color }]) => (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex items-center gap-2">
+                        <div className={`h-2 w-2 rounded-full ${color}`} />
+                        {label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Recurring Events */}

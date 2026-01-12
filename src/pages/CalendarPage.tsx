@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Filter } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
@@ -15,6 +15,15 @@ import { CalendarMonthView } from "@/components/calendar/CalendarMonthView";
 import { CalendarYearView } from "@/components/calendar/CalendarYearView";
 import { CalendarMiniMonth } from "@/components/calendar/CalendarMiniMonth";
 import { EventDetailsSidebar } from "@/components/calendar/EventDetailsSidebar";
+import { CategoryFilter } from "@/components/calendar/CategoryFilter";
+import { QuickEventDialog } from "@/components/calendar/QuickEventDialog";
+import { EditEventDialog } from "@/components/EditEventDialog";
+import { CategoryType } from "@/lib/eventCategories";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface EventException {
   id: string;
@@ -31,6 +40,16 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [selectedEvent, setSelectedEvent] = useState<(EventWithResponse & { isCancelled?: boolean }) | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<CategoryType[]>([]);
+  
+  // Quick event dialog state
+  const [quickEventOpen, setQuickEventOpen] = useState(false);
+  const [quickEventDate, setQuickEventDate] = useState<Date>();
+  const [quickEventTime, setQuickEventTime] = useState<string>();
+  
+  // Edit event dialog state
+  const [editEventOpen, setEditEventOpen] = useState(false);
+  const [eventToEdit, setEventToEdit] = useState<EventWithResponse | null>(null);
 
   // Fetch all exceptions for the user's events
   const { data: allExceptions = [] } = useQuery({
@@ -52,15 +71,24 @@ export default function CalendarPage() {
     enabled: !!user && events.length > 0,
   });
 
-  // Add cancellation status to events
+  // Add cancellation status to events and filter by category
   const eventsWithStatus = useMemo(() => {
-    return events.map((event) => {
+    let filtered = events.map((event) => {
       const isCancelled = allExceptions.some(
         ex => ex.event_id === event.id && ex.exception_date === event.event_date
       );
       return { ...event, isCancelled };
     });
-  }, [events, allExceptions]);
+
+    // Filter by category if any selected
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter(event => 
+        selectedCategories.includes(((event as any).category || "default") as CategoryType)
+      );
+    }
+
+    return filtered;
+  }, [events, allExceptions, selectedCategories]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -132,6 +160,26 @@ export default function CalendarPage() {
   const handleEventClick = (event: EventWithResponse) => {
     const eventWithStatus = eventsWithStatus.find(e => e.id === event.id);
     setSelectedEvent(eventWithStatus || { ...event, isCancelled: false });
+    
+    // Open edit dialog if user is the creator
+    if (event.isCreator) {
+      setEventToEdit(event);
+      setEditEventOpen(true);
+    }
+  };
+
+  const handleTimeSlotClick = (date: Date, time: string) => {
+    setQuickEventDate(date);
+    setQuickEventTime(time);
+    setQuickEventOpen(true);
+  };
+
+  const handleCategoryToggle = (category: CategoryType) => {
+    setSelectedCategories(prev => 
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
   };
 
   return (
@@ -139,7 +187,7 @@ export default function CalendarPage() {
       <div className="h-[calc(100vh-4rem)] flex flex-col">
         {/* Top Navigation Bar */}
         <div className="flex-shrink-0 border-b border-border bg-background px-4 py-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             {/* Left side - Navigation */}
             <div className="flex items-center gap-3">
               <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPrev}>
@@ -163,15 +211,42 @@ export default function CalendarPage() {
 
             {/* Right side - Actions */}
             <div className="flex items-center gap-2">
+              {/* Category Filter */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filter
+                    {selectedCategories.length > 0 && (
+                      <span className="bg-primary text-primary-foreground px-1.5 py-0.5 rounded text-xs">
+                        {selectedCategories.length}
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto" align="end">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Filter by Category</p>
+                    <CategoryFilter 
+                      selectedCategories={selectedCategories}
+                      onCategoryToggle={handleCategoryToggle}
+                    />
+                  </div>
+                </PopoverContent>
+              </Popover>
+
               <Button variant="outline" size="sm" onClick={goToToday}>
                 Today
               </Button>
-              <Link to="/create-event">
-                <Button size="sm" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Create Event
-                </Button>
-              </Link>
+              
+              <Button size="sm" className="gap-2" onClick={() => {
+                setQuickEventDate(selectedDate);
+                setQuickEventTime("09:00");
+                setQuickEventOpen(true);
+              }}>
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Create Event</span>
+              </Button>
             </div>
           </div>
         </div>
@@ -185,6 +260,7 @@ export default function CalendarPage() {
                 selectedDate={selectedDate}
                 events={eventsWithStatus}
                 onEventClick={handleEventClick}
+                onTimeSlotClick={handleTimeSlotClick}
               />
             )}
             {viewMode === "week" && (
@@ -193,6 +269,7 @@ export default function CalendarPage() {
                 events={eventsWithStatus}
                 onDateClick={handleDateClick}
                 onEventClick={handleEventClick}
+                onTimeSlotClick={handleTimeSlotClick}
               />
             )}
             {viewMode === "month" && (
@@ -232,11 +309,39 @@ export default function CalendarPage() {
             {selectedEvent && (
               <div className="border-t border-border pt-4">
                 <EventDetailsSidebar event={selectedEvent} />
+                {selectedEvent.isCreator && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full mt-4"
+                    onClick={() => {
+                      setEventToEdit(selectedEvent);
+                      setEditEventOpen(true);
+                    }}
+                  >
+                    Edit Event
+                  </Button>
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Quick Event Dialog */}
+      <QuickEventDialog
+        open={quickEventOpen}
+        onOpenChange={setQuickEventOpen}
+        initialDate={quickEventDate}
+        initialTime={quickEventTime}
+      />
+
+      {/* Edit Event Dialog */}
+      <EditEventDialog
+        event={eventToEdit}
+        open={editEventOpen}
+        onOpenChange={setEditEventOpen}
+      />
     </AppLayout>
   );
 }
