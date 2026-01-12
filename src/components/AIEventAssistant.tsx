@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX, Clock, Plus, RefreshCw, Trash2, Radio } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX, Clock, Plus, Trash2, Radio, LogOut } from "lucide-react";
 import { useAIEventAssistant } from "@/hooks/useAIEventAssistant";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { cn } from "@/lib/utils";
@@ -54,7 +54,14 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const pendingSubmitRef = useRef<string | null>(null);
   const handsFreeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Get random suggestions - changes each time suggestionSeed changes or component opens
+  // Refresh suggestions every time the assistant opens
+  useEffect(() => {
+    if (open) {
+      setSuggestionSeed(prev => prev + 1);
+    }
+  }, [open]);
+
+  // Get random suggestions - changes each time suggestionSeed changes
   const randomSuggestions = useMemo(() => {
     // Shuffle and pick 4 suggestions from different categories
     const shuffled = [...ALL_SUGGESTIONS].sort(() => Math.random() - 0.5);
@@ -78,11 +85,7 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     }
     
     return selected.slice(0, 4);
-  }, [suggestionSeed, open]);
-
-  const refreshSuggestions = () => {
-    setSuggestionSeed(prev => prev + 1);
-  };
+  }, [suggestionSeed]);
 
   // Check for Web Speech API support
   const speechSupported = typeof window !== 'undefined' && 
@@ -296,11 +299,9 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
 
       if (error) throw error;
 
-      toast.success("Event created successfully!");
+      toast.success(`Event "${parsedEvent.title}" created successfully!`);
       queryClient.invalidateQueries({ queryKey: ["events"] });
-      
-      // Send confirmation message
-      await sendMessage(`Great! I've created "${parsedEvent.title}" for you.`);
+      // No need to send another message - just show the toast
     } catch (error: any) {
       toast.error(error.message || "Failed to create event");
     } finally {
@@ -423,18 +424,7 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
             <div className="text-center py-8 text-muted-foreground">
               <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-sm font-medium mb-2">Hi! I'm your AI Event Assistant</p>
-              <div className="flex items-center justify-center gap-2 mb-3">
-                <p className="text-xs">Try saying:</p>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5"
-                  onClick={refreshSuggestions}
-                  title="Refresh suggestions"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </Button>
-              </div>
+              <p className="text-xs mb-3">Try saying:</p>
               <div className="mt-3 space-y-2">
                 {randomSuggestions.map((suggestion, index) => (
                   <button
@@ -456,6 +446,17 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
                   </p>
                 </div>
               )}
+              
+              {/* Exit button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 w-full gap-2"
+                onClick={() => onOpenChange(false)}
+              >
+                <LogOut className="h-3 w-3" />
+                Exit Assistant
+              </Button>
             </div>
           )}
 
