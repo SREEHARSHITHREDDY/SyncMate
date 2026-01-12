@@ -466,6 +466,10 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: boolean
       }
+      is_event_participant: {
+        Args: { event_uuid: string; user_uuid: string }
+        Returns: boolean
+      }
       is_friend_with: { Args: { target_user_id: string }; Returns: boolean }
       search_profiles_by_email: {
         Args: { search_query: string }

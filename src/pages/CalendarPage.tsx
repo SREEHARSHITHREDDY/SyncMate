@@ -1,23 +1,20 @@
 import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Calendar, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
-import { useEventExceptions } from "@/hooks/useEventExceptions";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, parseISO, isToday } from "date-fns";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { PriorityFilter } from "@/components/PriorityFilter";
+import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, addYears, subYears } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CalendarDayView } from "@/components/calendar/CalendarDayView";
+import { CalendarWeekView } from "@/components/calendar/CalendarWeekView";
+import { CalendarMonthView } from "@/components/calendar/CalendarMonthView";
+import { CalendarYearView } from "@/components/calendar/CalendarYearView";
+import { CalendarMiniMonth } from "@/components/calendar/CalendarMiniMonth";
+import { EventDetailsSidebar } from "@/components/calendar/EventDetailsSidebar";
 
 interface EventException {
   id: string;
@@ -25,12 +22,15 @@ interface EventException {
   exception_date: string;
 }
 
+type ViewMode = "day" | "week" | "month" | "year";
+
 export default function CalendarPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { events } = useEvents();
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high">("all");
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const [selectedEvent, setSelectedEvent] = useState<(EventWithResponse & { isCancelled?: boolean }) | null>(null);
 
   // Fetch all exceptions for the user's events
   const { data: allExceptions = [] } = useQuery({
@@ -52,11 +52,15 @@ export default function CalendarPage() {
     enabled: !!user && events.length > 0,
   });
 
-  // Filter events by priority
-  const filteredEvents = useMemo(() => {
-    if (priorityFilter === "all") return events;
-    return events.filter((e) => e.priority === priorityFilter);
-  }, [events, priorityFilter]);
+  // Add cancellation status to events
+  const eventsWithStatus = useMemo(() => {
+    return events.map((event) => {
+      const isCancelled = allExceptions.some(
+        ex => ex.event_id === event.id && ex.exception_date === event.event_date
+      );
+      return { ...event, isCancelled };
+    });
+  }, [events, allExceptions]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -64,249 +68,173 @@ export default function CalendarPage() {
     }
   }, [user, loading, navigate]);
 
-  const calendarDays = useMemo(() => {
-    const start = startOfMonth(currentMonth);
-    const end = endOfMonth(currentMonth);
-    return eachDayOfInterval({ start, end });
-  }, [currentMonth]);
-
-  const firstDayOfWeek = calendarDays[0]?.getDay() || 0;
-
-  const getEventsForDay = (day: Date): (EventWithResponse & { isCancelled?: boolean })[] => {
-    return filteredEvents
-      .filter((event) => {
-        const eventDate = parseISO(event.event_date);
-        return isSameDay(eventDate, day);
-      })
-      .map((event) => {
-        const isCancelled = allExceptions.some(
-          ex => ex.event_id === event.id && ex.exception_date === event.event_date
-        );
-        return { ...event, isCancelled };
-      });
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "low":
-        return "bg-priority-low";
-      case "high":
-        return "bg-priority-high";
-      default:
-        return "bg-priority-medium";
+  const goToPrev = () => {
+    switch (viewMode) {
+      case "day":
+        setSelectedDate(subDays(selectedDate, 1));
+        break;
+      case "week":
+        setSelectedDate(subWeeks(selectedDate, 1));
+        break;
+      case "month":
+        setSelectedDate(subMonths(selectedDate, 1));
+        break;
+      case "year":
+        setSelectedDate(subYears(selectedDate, 1));
+        break;
     }
   };
 
-  const monthEvents = useMemo(() => {
-    return filteredEvents
-      .filter((event) => {
-        const eventDate = parseISO(event.event_date);
-        return isSameMonth(eventDate, currentMonth);
-      })
-      .map((event) => {
-        const isCancelled = allExceptions.some(
-          ex => ex.event_id === event.id && ex.exception_date === event.event_date
-        );
-        return { ...event, isCancelled };
-      });
-  }, [filteredEvents, currentMonth, allExceptions]);
+  const goToNext = () => {
+    switch (viewMode) {
+      case "day":
+        setSelectedDate(addDays(selectedDate, 1));
+        break;
+      case "week":
+        setSelectedDate(addWeeks(selectedDate, 1));
+        break;
+      case "month":
+        setSelectedDate(addMonths(selectedDate, 1));
+        break;
+      case "year":
+        setSelectedDate(addYears(selectedDate, 1));
+        break;
+    }
+  };
 
-  const goToPrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
-  const goToNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
-  const goToToday = () => setCurrentMonth(new Date());
+  const goToToday = () => setSelectedDate(new Date());
+
+  const getHeaderTitle = () => {
+    switch (viewMode) {
+      case "day":
+        return format(selectedDate, "d MMMM yyyy");
+      case "week":
+        return format(selectedDate, "MMMM yyyy");
+      case "month":
+        return format(selectedDate, "MMMM yyyy");
+      case "year":
+        return format(selectedDate, "yyyy");
+    }
+  };
+
+  const handleDateClick = (date: Date) => {
+    setSelectedDate(date);
+    if (viewMode === "month" || viewMode === "year") {
+      setViewMode("day");
+    }
+  };
+
+  const handleMonthClick = (date: Date) => {
+    setSelectedDate(date);
+    setViewMode("month");
+  };
+
+  const handleEventClick = (event: EventWithResponse) => {
+    const eventWithStatus = eventsWithStatus.find(e => e.id === event.id);
+    setSelectedEvent(eventWithStatus || { ...event, isCancelled: false });
+  };
 
   return (
     <AppLayout>
-      <div className="container py-8">
-        <div className="mb-8 animate-fade-in flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold mb-2">Calendar</h1>
-            <p className="text-muted-foreground">View your scheduled events</p>
+      <div className="h-[calc(100vh-4rem)] flex flex-col">
+        {/* Top Navigation Bar */}
+        <div className="flex-shrink-0 border-b border-border bg-background px-4 py-3">
+          <div className="flex items-center justify-between">
+            {/* Left side - Navigation */}
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPrev}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToNext}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <h1 className="text-xl font-semibold">{getHeaderTitle()}</h1>
+            </div>
+
+            {/* Center - View Mode Tabs */}
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+              <TabsList className="bg-secondary">
+                <TabsTrigger value="day" className="px-4">Day</TabsTrigger>
+                <TabsTrigger value="week" className="px-4">Week</TabsTrigger>
+                <TabsTrigger value="month" className="px-4">Month</TabsTrigger>
+                <TabsTrigger value="year" className="px-4">Year</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {/* Right side - Actions */}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={goToToday}>
+                Today
+              </Button>
+              <Link to="/create-event">
+                <Button size="sm" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create Event
+                </Button>
+              </Link>
+            </div>
           </div>
-          <Link to="/create-event">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Create Event
-            </Button>
-          </Link>
         </div>
 
-        {/* Priority Filter */}
-        <div className="mb-6 animate-fade-in" style={{ animationDelay: '0.05s' }}>
-          <PriorityFilter value={priorityFilter} onChange={setPriorityFilter} />
-        </div>
+        {/* Main Content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Calendar View */}
+          <div className="flex-1 overflow-auto p-4">
+            {viewMode === "day" && (
+              <CalendarDayView
+                selectedDate={selectedDate}
+                events={eventsWithStatus}
+                onEventClick={handleEventClick}
+              />
+            )}
+            {viewMode === "week" && (
+              <CalendarWeekView
+                selectedDate={selectedDate}
+                events={eventsWithStatus}
+                onDateClick={handleDateClick}
+                onEventClick={handleEventClick}
+              />
+            )}
+            {viewMode === "month" && (
+              <CalendarMonthView
+                selectedDate={selectedDate}
+                events={eventsWithStatus}
+                onDateClick={handleDateClick}
+                onEventClick={handleEventClick}
+              />
+            )}
+            {viewMode === "year" && (
+              <CalendarYearView
+                selectedDate={selectedDate}
+                events={eventsWithStatus}
+                onMonthClick={handleMonthClick}
+              />
+            )}
+          </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Calendar Grid */}
-          <Card className="lg:col-span-2 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{format(currentMonth, "MMMM yyyy")}</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={goToToday}
-                >
-                  Today
-                </Button>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPrevMonth}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToNextMonth}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Day Headers */}
-              <div className="grid grid-cols-7 gap-1 mb-2">
-                {DAYS.map((day) => (
-                  <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
-                    {day}
-                  </div>
-                ))}
-              </div>
+          {/* Right Sidebar */}
+          <div className="w-72 border-l border-border p-4 flex-shrink-0 overflow-auto hidden lg:block">
+            {/* Mini Month Calendar */}
+            <div className="mb-6">
+              <CalendarMiniMonth
+                selectedDate={selectedDate}
+                onDateClick={(date) => {
+                  setSelectedDate(date);
+                  if (viewMode === "year") {
+                    setViewMode("day");
+                  }
+                }}
+                onMonthChange={setSelectedDate}
+              />
+            </div>
 
-              {/* Calendar Days */}
-              <div className="grid grid-cols-7 gap-1">
-                {/* Empty cells for offset */}
-                {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-                  <div key={`empty-${i}`} className="aspect-square" />
-                ))}
-                
-                {/* Day cells */}
-                {calendarDays.map((day) => {
-                  const dayEvents = getEventsForDay(day);
-                  const today = isToday(day);
-                  
-                  return (
-                    <Tooltip key={day.toISOString()}>
-                      <TooltipTrigger asChild>
-                        <div
-                          className={`aspect-square p-1 rounded-lg transition-colors hover:bg-secondary/50 cursor-pointer ${
-                            today ? "bg-primary/10 ring-1 ring-primary/20" : ""
-                          }`}
-                        >
-                          <div className="h-full flex flex-col">
-                            <span className={`text-sm ${today ? "font-bold text-primary" : ""}`}>
-                              {format(day, "d")}
-                            </span>
-                            {dayEvents.length > 0 && (
-                              <div className="flex flex-wrap gap-0.5 mt-1">
-                                {dayEvents.slice(0, 3).map((event) => (
-                                  <div
-                                    key={event.id}
-                                    className={`h-1.5 w-1.5 rounded-full ${getPriorityColor(event.priority)} ${
-                                      event.isCancelled || (event as any).is_completed ? "opacity-40" : ""
-                                    }`}
-                                  />
-                                ))}
-                                {dayEvents.length > 3 && (
-                                  <span className="text-[10px] text-muted-foreground">+{dayEvents.length - 3}</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </TooltipTrigger>
-                      {dayEvents.length > 0 && (
-                        <TooltipContent side="bottom" className="max-w-xs">
-                          <div className="space-y-1">
-                            {dayEvents.map((event) => {
-                              const isStrikethrough = event.isCancelled || (event as any).is_completed;
-                              return (
-                                <div key={event.id} className="flex items-center gap-2">
-                                  <div className={`h-2 w-2 rounded-full ${getPriorityColor(event.priority)} ${isStrikethrough ? "opacity-40" : ""}`} />
-                                  <span className={`text-sm ${isStrikethrough ? "line-through text-muted-foreground" : ""}`}>
-                                    {event.title}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">{event.event_time.slice(0, 5)}</span>
-                                  {event.isCancelled && <span className="text-xs text-destructive">(Cancelled)</span>}
-                                  {(event as any).is_completed && !event.isCancelled && <span className="text-xs text-muted-foreground">(Done)</span>}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  );
-                })}
+            {/* Selected Event Details */}
+            {selectedEvent && (
+              <div className="border-t border-border pt-4">
+                <EventDetailsSidebar event={selectedEvent} />
               </div>
-
-              {/* Legend */}
-              <div className="mt-6 pt-4 border-t border-border flex items-center gap-6 justify-center flex-wrap">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-priority-low" />
-                  <span className="text-sm text-muted-foreground">Low</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-priority-medium" />
-                  <span className="text-sm text-muted-foreground">Medium</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-priority-high" />
-                  <span className="text-sm text-muted-foreground">High</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40" />
-                  <span className="text-sm text-muted-foreground line-through">Completed/Cancelled</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* This Month's Events Sidebar */}
-          <Card className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            <CardHeader>
-              <CardTitle className="text-lg">This Month</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {monthEvents.length > 0 ? (
-                <div className="space-y-3">
-                  {monthEvents.map((event) => {
-                    const isStrikethrough = event.isCancelled || (event as any).is_completed;
-                    return (
-                      <div
-                        key={event.id}
-                        className={`flex items-start gap-3 p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors ${
-                          isStrikethrough ? "opacity-60" : ""
-                        }`}
-                      >
-                        <div className={`h-2 w-2 rounded-full mt-1.5 ${getPriorityColor(event.priority)}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className={`font-medium text-sm truncate ${isStrikethrough ? "line-through text-muted-foreground" : ""}`}>
-                            {event.title}
-                          </p>
-                          <p className={`text-xs ${isStrikethrough ? "line-through text-muted-foreground/70" : "text-muted-foreground"}`}>
-                            {format(parseISO(event.event_date), "EEE, MMM d")} at {event.event_time.slice(0, 5)}
-                          </p>
-                          {event.isCancelled && (
-                            <span className="text-xs text-destructive">Cancelled</span>
-                          )}
-                          {(event as any).is_completed && !event.isCancelled && (
-                            <span className="text-xs text-muted-foreground">Completed</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
-                    <Calendar className="h-6 w-6 text-primary" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">No events this month</p>
-                  <Link to="/create-event" className="mt-3">
-                    <Button variant="outline" size="sm">
-                      Create one
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            )}
+          </div>
         </div>
       </div>
     </AppLayout>
