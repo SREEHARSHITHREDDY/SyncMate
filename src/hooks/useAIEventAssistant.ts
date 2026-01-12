@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEvents } from "@/hooks/useEvents";
+import { useAIConversation, AIMessage } from "@/hooks/useAIConversation";
 import { toast } from "sonner";
 
 interface ParsedEvent {
@@ -29,7 +30,7 @@ interface TimeSuggestion {
   reason: string;
 }
 
-interface ChatMessage {
+export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   parsedEvent?: ParsedEvent;
@@ -38,15 +39,25 @@ interface ChatMessage {
 }
 
 export function useAIEventAssistant() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { messages: persistedMessages, addMessage, clearConversation, isLoading: conversationLoading } = useAIConversation();
   const [isLoading, setIsLoading] = useState(false);
   const { events } = useEvents();
+
+  // Convert persisted messages to ChatMessage format
+  const messages: ChatMessage[] = persistedMessages.map(m => ({
+    role: m.role,
+    content: m.content,
+    parsedEvent: m.parsedEvent,
+    searchResults: m.searchResults,
+    timeSuggestions: m.timeSuggestions,
+  }));
 
   const sendMessage = useCallback(async (message: string): Promise<void> => {
     if (!message.trim()) return;
 
-    // Add user message to chat
-    setMessages((prev) => [...prev, { role: "user", content: message }]);
+    // Add user message
+    const userMessage: AIMessage = { role: "user", content: message };
+    await addMessage(userMessage);
     setIsLoading(true);
 
     try {
@@ -145,17 +156,16 @@ export function useAIEventAssistant() {
 
       const data = await response.json();
 
+      let assistantMessage: AIMessage;
+
       if (action === "parse" && data.event) {
         // Event was parsed
         const { event } = data;
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: `I understood that! Here's what I parsed:\n\n📅 **${event.title}**\n📆 ${event.date} at ${event.time}\n🎯 Priority: ${event.priority}${event.description ? `\n📝 ${event.description}` : ""}${event.invitees?.length ? `\n👥 Invite: ${event.invitees.join(", ")}` : ""}\n\nWould you like me to create this event?`,
-            parsedEvent: event,
-          },
-        ]);
+        assistantMessage = {
+          role: "assistant",
+          content: `I understood that! Here's what I parsed:\n\n📅 **${event.title}**\n📆 ${event.date} at ${event.time}\n🎯 Priority: ${event.priority}${event.description ? `\n📝 ${event.description}` : ""}${event.invitees?.length ? `\n👥 Invite: ${event.invitees.join(", ")}` : ""}\n\nWould you like me to create this event?`,
+          parsedEvent: event,
+        };
       } else if (action === "suggest_time" && data.suggestions) {
         // Time suggestions with clickable slots
         const suggestions: TimeSuggestion[] = data.suggestions.map((s: any) => ({
@@ -168,60 +178,56 @@ export function useAIEventAssistant() {
         const suggestionsText = suggestions
           .map((s, i) => `${i + 1}. **${s.time}**\n   _${s.reason}_`)
           .join("\n\n");
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: `Based on your schedule, here are the best times:\n\n${suggestionsText}\n\nClick any slot below to create an event:`,
-            timeSuggestions: suggestions,
-          },
-        ]);
+        assistantMessage = {
+          role: "assistant",
+          content: `Based on your schedule, here are the best times:\n\n${suggestionsText}\n\nClick any slot below to create an event:`,
+          timeSuggestions: suggestions,
+        };
       } else if (action === "search" && data.results) {
         // Search results
         if (data.results.length === 0) {
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: "I couldn't find any events matching your search. Try a different query or check your upcoming events." },
-          ]);
+          assistantMessage = {
+            role: "assistant",
+            content: "I couldn't find any events matching your search. Try a different query or check your upcoming events.",
+          };
         } else {
           const resultsSummary = data.results
             .map((r: SearchResult) => `• **${r.title}** (${r.event_date})\n  _${r.relevanceReason}_`)
             .join("\n\n");
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: `Found ${data.results.length} relevant event${data.results.length > 1 ? "s" : ""}:\n\n${resultsSummary}`,
-              searchResults: data.results,
-            },
-          ]);
+          assistantMessage = {
+            role: "assistant",
+            content: `Found ${data.results.length} relevant event${data.results.length > 1 ? "s" : ""}:\n\n${resultsSummary}`,
+            searchResults: data.results,
+          };
         }
       } else {
         // General chat
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.reply || "I couldn't process that. Please try again." },
-        ]);
+        assistantMessage = {
+          role: "assistant",
+          content: data.reply || "I couldn't process that. Please try again.",
+        };
       }
+
+      await addMessage(assistantMessage);
     } catch (error: any) {
       console.error("AI Assistant error:", error);
       toast.error(error.message || "Failed to process your request");
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Sorry, I encountered an error. Please try again." },
-      ]);
+      await addMessage({
+        role: "assistant",
+        content: "Sorry, I encountered an error. Please try again.",
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [events]);
+  }, [events, addMessage]);
 
-  const clearMessages = useCallback(() => {
-    setMessages([]);
-  }, []);
+  const clearMessages = useCallback(async () => {
+    await clearConversation();
+  }, [clearConversation]);
 
   return {
     messages,
-    isLoading,
+    isLoading: isLoading || conversationLoading,
     sendMessage,
     clearMessages,
   };
