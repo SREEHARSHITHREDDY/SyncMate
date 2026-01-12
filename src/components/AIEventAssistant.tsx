@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX, Clock, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX, Clock, Plus, RefreshCw, Trash2, Radio } from "lucide-react";
 import { useAIEventAssistant } from "@/hooks/useAIEventAssistant";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { cn } from "@/lib/utils";
@@ -46,9 +47,12 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const [creatingEvent, setCreatingEvent] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [handsFreeMode, setHandsFreeMode] = useState(false);
   const recognitionRef = useRef<typeof window.SpeechRecognition.prototype | null>(null);
   const { speak, stop, isSpeaking, isSupported: ttsSupported } = useTextToSpeech();
   const [suggestionSeed, setSuggestionSeed] = useState(0);
+  const pendingSubmitRef = useRef<string | null>(null);
+  const handsFreeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get random suggestions - changes each time suggestionSeed changes or component opens
   const randomSuggestions = useMemo(() => {
@@ -84,7 +88,32 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const speechSupported = typeof window !== 'undefined' && 
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
-  // Initialize speech recognition
+  // Start listening for hands-free mode
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current || isLoading || isSpeaking) return;
+    
+    try {
+      setInput('');
+      recognitionRef.current.start();
+      setIsListening(true);
+    } catch (error) {
+      console.error('Failed to start listening:', error);
+    }
+  }, [isLoading, isSpeaking]);
+
+  // Stop listening
+  const stopListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+    
+    try {
+      recognitionRef.current.stop();
+    } catch (error) {
+      console.error('Failed to stop listening:', error);
+    }
+    setIsListening(false);
+  }, []);
+
+  // Initialize speech recognition with enhanced handlers
   useEffect(() => {
     if (!speechSupported) return;
 
@@ -94,23 +123,58 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map(result => result[0].transcript)
-        .join('');
-      setInput(transcript);
+    let finalTranscript = '';
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      
+      setInput(finalTranscript || interimTranscript);
+      
+      // Store final transcript for submission
+      if (finalTranscript) {
+        pendingSubmitRef.current = finalTranscript;
+      }
     };
 
-    recognition.onerror = (event) => {
+    recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
+      
       if (event.error === 'not-allowed') {
         toast.error('Microphone access denied. Please enable it in your browser settings.');
+        setHandsFreeMode(false);
+      } else if (event.error === 'no-speech' && handsFreeMode) {
+        // In hands-free mode, restart listening if no speech detected
+        setTimeout(() => {
+          if (handsFreeMode && !isLoading && !isSpeaking) {
+            startListening();
+          }
+        }, 500);
       }
     };
 
     recognition.onend = () => {
       setIsListening(false);
+      
+      // Auto-submit in hands-free mode when speech ends
+      if (pendingSubmitRef.current && handsFreeMode) {
+        const transcript = pendingSubmitRef.current;
+        pendingSubmitRef.current = null;
+        
+        if (transcript.trim()) {
+          setInput('');
+          sendMessage(transcript.trim());
+        }
+      }
     };
 
     recognitionRef.current = recognition;
@@ -118,20 +182,56 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     return () => {
       recognition.abort();
     };
-  }, [speechSupported]);
+  }, [speechSupported, handsFreeMode, isLoading, isSpeaking, sendMessage, startListening]);
+
+  // Restart listening after TTS finishes speaking (hands-free mode)
+  useEffect(() => {
+    if (handsFreeMode && !isSpeaking && !isLoading && !isListening && messages.length > 0) {
+      // Small delay before starting to listen again
+      handsFreeTimeoutRef.current = setTimeout(() => {
+        if (handsFreeMode && !isSpeaking && !isLoading) {
+          startListening();
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (handsFreeTimeoutRef.current) {
+        clearTimeout(handsFreeTimeoutRef.current);
+      }
+    };
+  }, [handsFreeMode, isSpeaking, isLoading, isListening, messages.length, startListening]);
+
+  // Toggle hands-free mode
+  const toggleHandsFreeMode = useCallback(() => {
+    if (handsFreeMode) {
+      // Turning off
+      setHandsFreeMode(false);
+      stopListening();
+      stop();
+      toast.info("Hands-free mode disabled");
+    } else {
+      // Turning on
+      if (!speechSupported) {
+        toast.error("Speech recognition not supported in your browser");
+        return;
+      }
+      setHandsFreeMode(true);
+      setVoiceEnabled(true); // Enable TTS when entering hands-free mode
+      toast.success("Hands-free mode enabled! Start speaking...");
+      startListening();
+    }
+  }, [handsFreeMode, speechSupported, stopListening, stop, startListening]);
 
   const toggleListening = useCallback(() => {
     if (!recognitionRef.current) return;
 
     if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
+      stopListening();
     } else {
-      setInput('');
-      recognitionRef.current.start();
-      setIsListening(true);
+      startListening();
     }
-  }, [isListening]);
+  }, [isListening, startListening, stopListening]);
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -151,10 +251,19 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   }, [messages, voiceEnabled, ttsSupported, speak, isLoading]);
 
   useEffect(() => {
-    if (open && inputRef.current) {
+    if (open && inputRef.current && !handsFreeMode) {
       inputRef.current.focus();
     }
-  }, [open]);
+  }, [open, handsFreeMode]);
+
+  // Cleanup on unmount or close
+  useEffect(() => {
+    if (!open) {
+      stopListening();
+      stop();
+      setHandsFreeMode(false);
+    }
+  }, [open, stopListening, stop]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,10 +360,26 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     <Card className="fixed bottom-20 right-4 w-[380px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-8rem)] shadow-2xl z-50 flex flex-col animate-in slide-in-from-bottom-4 duration-300">
       <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b shrink-0">
         <CardTitle className="text-base flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Sparkles className="h-4 w-4 text-white" />
+          <div className={cn(
+            "h-8 w-8 rounded-full flex items-center justify-center transition-all",
+            handsFreeMode 
+              ? "bg-gradient-to-br from-success to-primary animate-pulse" 
+              : "bg-gradient-to-br from-primary to-accent"
+          )}>
+            {handsFreeMode ? (
+              <Radio className="h-4 w-4 text-white" />
+            ) : (
+              <Sparkles className="h-4 w-4 text-white" />
+            )}
           </div>
-          AI Event Assistant
+          <div className="flex flex-col">
+            <span>AI Event Assistant</span>
+            {handsFreeMode && (
+              <span className="text-[10px] text-success font-normal">
+                {isListening ? "Listening..." : isSpeaking ? "Speaking..." : "Ready"}
+              </span>
+            )}
+          </div>
         </CardTitle>
         <div className="flex items-center gap-1">
           {messages.length > 0 && (
@@ -321,6 +446,16 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
                   </button>
                 ))}
               </div>
+              
+              {/* Hands-free mode info */}
+              {speechSupported && (
+                <div className="mt-6 p-3 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-xs font-medium text-primary mb-1">🎤 Hands-Free Mode</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Click the radio button below to enable continuous voice conversation
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -442,16 +577,48 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
       </ScrollArea>
 
       <CardContent className="p-3 border-t shrink-0">
+        {/* Hands-free mode indicator */}
+        {handsFreeMode && (
+          <div className="flex items-center justify-center gap-2 mb-2 py-2 px-3 rounded-lg bg-success/10 border border-success/20">
+            <div className={cn(
+              "w-2 h-2 rounded-full",
+              isListening ? "bg-success animate-pulse" : isSpeaking ? "bg-primary animate-pulse" : "bg-muted-foreground"
+            )} />
+            <span className="text-xs font-medium">
+              {isListening ? "Listening for your command..." : isSpeaking ? "Speaking response..." : isLoading ? "Processing..." : "Waiting..."}
+            </span>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isListening ? "Listening..." : "Schedule a meeting, search events..."}
+            placeholder={isListening ? "Listening..." : handsFreeMode ? "Hands-free active" : "Schedule a meeting, search events..."}
             className="flex-1"
-            disabled={isLoading}
+            disabled={isLoading || handsFreeMode}
           />
+          
+          {/* Hands-free toggle button */}
           {speechSupported && (
+            <Button
+              type="button"
+              size="icon"
+              variant={handsFreeMode ? "default" : "outline"}
+              onClick={toggleHandsFreeMode}
+              disabled={isLoading}
+              className={cn(
+                handsFreeMode && "bg-success hover:bg-success/90"
+              )}
+              title={handsFreeMode ? "Disable hands-free mode" : "Enable hands-free mode"}
+            >
+              <Radio className={cn("h-4 w-4", handsFreeMode && "animate-pulse")} />
+            </Button>
+          )}
+          
+          {/* Manual mic button (hidden in hands-free mode) */}
+          {speechSupported && !handsFreeMode && (
             <Button
               type="button"
               size="icon"
@@ -459,11 +626,13 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
               onClick={toggleListening}
               disabled={isLoading}
               className={isListening ? "animate-pulse" : ""}
+              title={isListening ? "Stop listening" : "Start voice input"}
             >
               {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
           )}
-          <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
+          
+          <Button type="submit" size="icon" disabled={isLoading || !input.trim() || handsFreeMode}>
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
