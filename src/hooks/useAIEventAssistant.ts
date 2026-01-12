@@ -59,19 +59,20 @@ export function useAIEventAssistant() {
 
       // Detect intent from message
       const lowerMessage = message.toLowerCase();
-      const isScheduleIntent = 
-        lowerMessage.includes("schedule") ||
-        lowerMessage.includes("create") ||
-        lowerMessage.includes("plan") ||
-        lowerMessage.includes("set up") ||
-        lowerMessage.includes("book") ||
-        lowerMessage.includes("add event") ||
-        lowerMessage.includes("meeting at") ||
-        lowerMessage.includes("at ") && (
-          lowerMessage.includes("am") || 
-          lowerMessage.includes("pm") ||
-          /\d{1,2}:\d{2}/.test(lowerMessage)
-        );
+      
+      // Check for schedule/view intent FIRST (questions about existing schedule)
+      const isScheduleViewIntent =
+        lowerMessage.includes("what's my schedule") ||
+        lowerMessage.includes("whats my schedule") ||
+        lowerMessage.includes("my schedule") ||
+        lowerMessage.includes("show my schedule") ||
+        lowerMessage.includes("schedule looking like") ||
+        lowerMessage.includes("what do i have") ||
+        lowerMessage.includes("what events") ||
+        lowerMessage.includes("show me my events") ||
+        lowerMessage.includes("upcoming events") ||
+        lowerMessage.includes("today's events") ||
+        lowerMessage.includes("this week");
 
       const isSearchIntent =
         lowerMessage.includes("find") ||
@@ -89,10 +90,29 @@ export function useAIEventAssistant() {
         lowerMessage.includes("free slot") ||
         lowerMessage.includes("available time");
 
+      const isScheduleIntent = 
+        !isScheduleViewIntent && // Don't treat view intent as create intent
+        !isSuggestTimeIntent && // Don't treat suggestion requests as create
+        (
+          lowerMessage.includes("schedule") ||
+          lowerMessage.includes("create") ||
+          lowerMessage.includes("plan") ||
+          lowerMessage.includes("set up") ||
+          lowerMessage.includes("book") ||
+          lowerMessage.includes("add event") ||
+          lowerMessage.includes("meeting at") ||
+          (lowerMessage.includes("at ") && (
+            lowerMessage.includes("am") || 
+            lowerMessage.includes("pm") ||
+            /\d{1,2}:\d{2}/.test(lowerMessage)
+          ))
+        );
+
       let action = "chat";
-      if (isScheduleIntent && !isSuggestTimeIntent) action = "parse";
+      if (isScheduleViewIntent) action = "chat"; // Always use chat for viewing schedule
       else if (isSuggestTimeIntent) action = "suggest_time";
       else if (isSearchIntent) action = "search";
+      else if (isScheduleIntent) action = "parse";
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-event-assistant`,

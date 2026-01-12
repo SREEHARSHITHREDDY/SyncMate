@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX, Clock, Plus } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2, VolumeX, Clock, Plus, RefreshCw } from "lucide-react";
 import { useAIEventAssistant } from "@/hooks/useAIEventAssistant";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,24 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
+
+// All possible suggestions - will be randomly selected
+const ALL_SUGGESTIONS = [
+  { text: "Schedule a coffee with Sarah next Friday at 10am", category: "create" },
+  { text: "Book a team meeting for Monday at 2pm", category: "create" },
+  { text: "Plan a lunch with John tomorrow at noon", category: "create" },
+  { text: "Set up a workout session for Saturday morning", category: "create" },
+  { text: "Create a dentist appointment for next week", category: "create" },
+  { text: "Find events with friends this week", category: "search" },
+  { text: "What's my schedule looking like?", category: "view" },
+  { text: "Show me my events for tomorrow", category: "view" },
+  { text: "Do I have anything planned this weekend?", category: "view" },
+  { text: "What meetings do I have today?", category: "view" },
+  { text: "Suggest a good time for a meeting this week", category: "suggest" },
+  { text: "When am I free for a 1-hour call?", category: "suggest" },
+  { text: "Find the best time for a team sync", category: "suggest" },
+  { text: "What's a good slot for lunch with the team?", category: "suggest" },
+];
 
 interface AIEventAssistantProps {
   open: boolean;
@@ -30,6 +48,37 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const recognitionRef = useRef<typeof window.SpeechRecognition.prototype | null>(null);
   const { speak, stop, isSpeaking, isSupported: ttsSupported } = useTextToSpeech();
+  const [suggestionSeed, setSuggestionSeed] = useState(0);
+
+  // Get random suggestions - changes each time suggestionSeed changes or component opens
+  const randomSuggestions = useMemo(() => {
+    // Shuffle and pick 4 suggestions from different categories
+    const shuffled = [...ALL_SUGGESTIONS].sort(() => Math.random() - 0.5);
+    const selected: typeof ALL_SUGGESTIONS = [];
+    const usedCategories = new Set<string>();
+    
+    // Try to get one from each category first
+    for (const item of shuffled) {
+      if (!usedCategories.has(item.category) && selected.length < 4) {
+        selected.push(item);
+        usedCategories.add(item.category);
+      }
+    }
+    
+    // Fill remaining slots if needed
+    for (const item of shuffled) {
+      if (selected.length >= 4) break;
+      if (!selected.includes(item)) {
+        selected.push(item);
+      }
+    }
+    
+    return selected.slice(0, 4);
+  }, [suggestionSeed, open]);
+
+  const refreshSuggestions = () => {
+    setSuggestionSeed(prev => prev + 1);
+  };
 
   // Check for Web Speech API support
   const speechSupported = typeof window !== 'undefined' && 
@@ -238,32 +287,28 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
             <div className="text-center py-8 text-muted-foreground">
               <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-sm font-medium mb-2">Hi! I'm your AI Event Assistant</p>
-              <p className="text-xs">Try saying:</p>
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <p className="text-xs">Try saying:</p>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5"
+                  onClick={refreshSuggestions}
+                  title="Refresh suggestions"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </Button>
+              </div>
               <div className="mt-3 space-y-2">
-                <button
-                  className="block w-full text-left text-xs bg-secondary/50 hover:bg-secondary px-3 py-2 rounded-lg transition-colors"
-                  onClick={() => sendMessage("Schedule a coffee with Sarah next Friday at 10am")}
-                >
-                  "Schedule a coffee with Sarah next Friday at 10am"
-                </button>
-                <button
-                  className="block w-full text-left text-xs bg-secondary/50 hover:bg-secondary px-3 py-2 rounded-lg transition-colors"
-                  onClick={() => sendMessage("Find events with friends this week")}
-                >
-                  "Find events with friends this week"
-                </button>
-                <button
-                  className="block w-full text-left text-xs bg-secondary/50 hover:bg-secondary px-3 py-2 rounded-lg transition-colors"
-                  onClick={() => sendMessage("What's my schedule looking like?")}
-                >
-                  "What's my schedule looking like?"
-                </button>
-                <button
-                  className="block w-full text-left text-xs bg-secondary/50 hover:bg-secondary px-3 py-2 rounded-lg transition-colors"
-                  onClick={() => sendMessage("Suggest a good time for a 1-hour team meeting this week")}
-                >
-                  "Suggest a good time for a meeting this week"
-                </button>
+                {randomSuggestions.map((suggestion, index) => (
+                  <button
+                    key={`${suggestion.text}-${suggestionSeed}-${index}`}
+                    className="block w-full text-left text-xs bg-secondary/50 hover:bg-secondary px-3 py-2 rounded-lg transition-colors"
+                    onClick={() => sendMessage(suggestion.text)}
+                  >
+                    "{suggestion.text}"
+                  </button>
+                ))}
               </div>
             </div>
           )}
