@@ -53,6 +53,16 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const [suggestionSeed, setSuggestionSeed] = useState(0);
   const pendingSubmitRef = useRef<string | null>(null);
   const handsFreeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Voice confirmation states
+  const [pendingEventConfirmation, setPendingEventConfirmation] = useState<{
+    title: string;
+    date: string;
+    time: string;
+    priority: "low" | "medium" | "high";
+    description?: string;
+  } | null>(null);
+  const [confirmationMode, setConfirmationMode] = useState(false);
 
   // Refresh suggestions every time the assistant opens
   useEffect(() => {
@@ -116,6 +126,77 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     setIsListening(false);
   }, []);
 
+  // Handle voice confirmation for event creation
+  const handleVoiceConfirmation = useCallback(async (transcript: string) => {
+    const lowerTranscript = transcript.toLowerCase().trim();
+    
+    // Confirmation phrases
+    const confirmPhrases = ["yes", "yeah", "yep", "confirm", "create", "create it", "do it", "go ahead", "sure", "ok", "okay"];
+    // Rejection phrases
+    const rejectPhrases = ["no", "nope", "cancel", "don't", "dont", "never mind", "nevermind", "skip", "stop"];
+    
+    const isConfirm = confirmPhrases.some(phrase => lowerTranscript.includes(phrase));
+    const isReject = rejectPhrases.some(phrase => lowerTranscript.includes(phrase));
+    
+    if (isConfirm && pendingEventConfirmation) {
+      // Create the event
+      setConfirmationMode(false);
+      await handleCreateEventWithVoiceFeedback(pendingEventConfirmation);
+      setPendingEventConfirmation(null);
+    } else if (isReject) {
+      // Cancel
+      setConfirmationMode(false);
+      setPendingEventConfirmation(null);
+      const cancelMessage = "Okay, I've cancelled that. What would you like to do next?";
+      speak(cancelMessage);
+    } else {
+      // Unclear - ask again
+      speak("I didn't catch that. Say 'yes' to create the event, or 'no' to cancel.");
+    }
+  }, [pendingEventConfirmation, speak]);
+
+  // Create event with voice feedback
+  const handleCreateEventWithVoiceFeedback = useCallback(async (parsedEvent: {
+    title: string;
+    date: string;
+    time: string;
+    priority: "low" | "medium" | "high";
+    description?: string;
+  }) => {
+    if (!user) return;
+    setCreatingEvent(true);
+
+    try {
+      const { error } = await supabase.from("events").insert({
+        creator_id: user.id,
+        title: parsedEvent.title,
+        description: parsedEvent.description || null,
+        event_date: parsedEvent.date,
+        event_time: parsedEvent.time,
+        priority: parsedEvent.priority,
+      });
+
+      if (error) throw error;
+
+      toast.success(`Event "${parsedEvent.title}" created successfully!`);
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      
+      // Voice feedback for hands-free mode
+      if (handsFreeMode) {
+        const formattedDate = format(parseISO(parsedEvent.date), "EEEE, MMMM do");
+        const timeFormatted = parsedEvent.time.slice(0, 5);
+        speak(`Done! I've created ${parsedEvent.title} for ${formattedDate} at ${timeFormatted}. What else would you like to do?`);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create event");
+      if (handsFreeMode) {
+        speak("Sorry, I couldn't create that event. Please try again.");
+      }
+    } finally {
+      setCreatingEvent(false);
+    }
+  }, [user, queryClient, handsFreeMode, speak]);
+
   // Initialize speech recognition with enhanced handlers
   useEffect(() => {
     if (!speechSupported) return;
@@ -175,7 +256,13 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
         
         if (transcript.trim()) {
           setInput('');
-          sendMessage(transcript.trim());
+          
+          // Check if we're in confirmation mode
+          if (confirmationMode) {
+            handleVoiceConfirmation(transcript.trim());
+          } else {
+            sendMessage(transcript.trim());
+          }
         }
       }
     };
@@ -185,7 +272,7 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     return () => {
       recognition.abort();
     };
-  }, [speechSupported, handsFreeMode, isLoading, isSpeaking, sendMessage, startListening]);
+  }, [speechSupported, handsFreeMode, isLoading, isSpeaking, sendMessage, startListening, confirmationMode, handleVoiceConfirmation]);
 
   // Restart listening after TTS finishes speaking (hands-free mode)
   useEffect(() => {
@@ -243,15 +330,28 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     }
   }, [messages]);
 
-  // Auto-speak new assistant messages
+  // Auto-speak new assistant messages and handle voice confirmation
   useEffect(() => {
     if (messages.length > 0 && voiceEnabled && ttsSupported) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.role === "assistant" && !isLoading) {
-        speak(lastMessage.content);
+        // Check if this message has a parsed event and we're in hands-free mode
+        if (lastMessage.parsedEvent && handsFreeMode) {
+          const event = lastMessage.parsedEvent;
+          const formattedDate = format(parseISO(event.date), "EEEE, MMMM do");
+          const confirmationPrompt = `${lastMessage.content} Say 'yes' or 'confirm' to create this event, or 'no' to cancel.`;
+          
+          // Store the pending event for confirmation
+          setPendingEventConfirmation(event);
+          setConfirmationMode(true);
+          
+          speak(confirmationPrompt);
+        } else {
+          speak(lastMessage.content);
+        }
       }
     }
-  }, [messages, voiceEnabled, ttsSupported, speak, isLoading]);
+  }, [messages, voiceEnabled, ttsSupported, speak, isLoading, handsFreeMode]);
 
   useEffect(() => {
     if (open && inputRef.current && !handsFreeMode) {
@@ -265,6 +365,8 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
       stopListening();
       stop();
       setHandsFreeMode(false);
+      setPendingEventConfirmation(null);
+      setConfirmationMode(false);
     }
   }, [open, stopListening, stop]);
 
@@ -376,8 +478,11 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
           <div className="flex flex-col">
             <span>AI Event Assistant</span>
             {handsFreeMode && (
-              <span className="text-[10px] text-success font-normal">
-                {isListening ? "Listening..." : isSpeaking ? "Speaking..." : "Ready"}
+              <span className={cn(
+                "text-[10px] font-normal",
+                confirmationMode ? "text-amber-500" : "text-success"
+              )}>
+                {confirmationMode ? "Awaiting confirmation..." : isListening ? "Listening..." : isSpeaking ? "Speaking..." : "Ready"}
               </span>
             )}
           </div>
@@ -578,8 +683,26 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
       </ScrollArea>
 
       <CardContent className="p-3 border-t shrink-0">
+        {/* Voice confirmation indicator */}
+        {confirmationMode && pendingEventConfirmation && (
+          <div className="mb-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 animate-pulse">
+            <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">
+              🎤 Awaiting voice confirmation...
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              Say "yes" or "confirm" to create, or "no" to cancel
+            </p>
+            <div className="mt-2 p-2 rounded bg-background/50">
+              <p className="text-xs font-medium">{pendingEventConfirmation.title}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {format(parseISO(pendingEventConfirmation.date), "MMM d")} at {pendingEventConfirmation.time.slice(0, 5)}
+              </p>
+            </div>
+          </div>
+        )}
+        
         {/* Hands-free mode indicator */}
-        {handsFreeMode && (
+        {handsFreeMode && !confirmationMode && (
           <div className="flex items-center justify-center gap-2 mb-2 py-2 px-3 rounded-lg bg-success/10 border border-success/20">
             <div className={cn(
               "w-2 h-2 rounded-full",
