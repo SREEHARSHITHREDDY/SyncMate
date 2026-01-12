@@ -94,32 +94,13 @@ export function useActionItems(eventId: string, minuteId?: string) {
 
       if (error) throw error;
 
-      // Create notification for assignee if assigned
+      // Create notification for assignee using secure RPC function
       if (assigneeId && assigneeId !== user!.id) {
-        const { data: event } = await supabase
-          .from("events")
-          .select("title")
-          .eq("id", eventId)
-          .single();
-
-        const { data: creatorProfile } = await supabase
-          .from("profiles")
-          .select("name")
-          .eq("user_id", user!.id)
-          .single();
-
-        let message = `${creatorProfile?.name || "Someone"} assigned you an action item in "${event?.title || "an event"}"`;
-        if (dueDate) {
-          const formattedDate = new Date(dueDate).toLocaleDateString();
-          message += ` (due ${formattedDate})`;
-        }
-
-        await supabase.from("notifications").insert({
-          user_id: assigneeId,
-          type: "action_item",
-          title: "New action item assigned",
-          message,
-          reference_id: eventId,
+        await supabase.rpc('create_action_item_notification', {
+          p_assignee_id: assigneeId,
+          p_event_id: eventId,
+          p_action_item_content: content,
+          p_due_date: dueDate || null,
         });
       }
 

@@ -530,6 +530,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_action_item_notification: {
+        Args: {
+          p_action_item_content: string
+          p_assignee_id: string
+          p_due_date?: string
+          p_event_id: string
+        }
+        Returns: undefined
+      }
+      create_mention_notification: {
+        Args: { p_event_id: string; p_mentioned_user_ids: string[] }
+        Returns: undefined
+      }
       has_pending_request_from: {
         Args: { target_user_id: string }
         Returns: boolean
