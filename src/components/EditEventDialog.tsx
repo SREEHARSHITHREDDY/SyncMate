@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { RecurrenceSelect, RecurrenceType } from "@/components/RecurrenceSelect";
+import { CATEGORY_COLORS, CategoryType } from "@/lib/eventCategories";
 
 interface EditEventDialogProps {
   event: EventWithResponse | null;
@@ -52,6 +53,7 @@ export function EditEventDialog({ event, open, onOpenChange }: EditEventDialogPr
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("none");
   const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>();
+  const [category, setCategory] = useState<CategoryType>("default");
 
   useEffect(() => {
     if (event) {
@@ -60,10 +62,11 @@ export function EditEventDialog({ event, open, onOpenChange }: EditEventDialogPr
       setDate(new Date(event.event_date));
       setTime(event.event_time.slice(0, 5));
       setPriority(event.priority);
-      // Handle recurrence from extended event type
+      // Handle recurrence and category from extended event type
       const eventData = event as any;
       setRecurrenceType(eventData.recurrence_type || "none");
       setRecurrenceEndDate(eventData.recurrence_end_date ? new Date(eventData.recurrence_end_date) : undefined);
+      setCategory(eventData.category || "default");
     }
   }, [event]);
 
@@ -86,6 +89,7 @@ export function EditEventDialog({ event, open, onOpenChange }: EditEventDialogPr
           priority,
           recurrence_type: recurrenceType === "none" ? null : recurrenceType,
           recurrence_end_date: recurrenceEndDate ? format(recurrenceEndDate, "yyyy-MM-dd") : null,
+          category,
         })
         .eq("id", event.id)
         .eq("creator_id", user.id);
@@ -198,6 +202,26 @@ export function EditEventDialog({ event, open, onOpenChange }: EditEventDialogPr
                     High
                   </div>
                 </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Category */}
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={category} onValueChange={(v) => setCategory(v as CategoryType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(CATEGORY_COLORS).map(([key, { label, color }]) => (
+                  <SelectItem key={key} value={key}>
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2 w-2 rounded-full ${color}`} />
+                      {label}
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

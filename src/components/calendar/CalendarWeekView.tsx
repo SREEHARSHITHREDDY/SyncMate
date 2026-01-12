@@ -1,17 +1,19 @@
 import { useMemo } from "react";
 import { format, parseISO, isSameDay, startOfWeek, addDays, isToday } from "date-fns";
 import { EventWithResponse } from "@/hooks/useEvents";
+import { getCategoryColor } from "@/lib/eventCategories";
 
 interface CalendarWeekViewProps {
   selectedDate: Date;
   events: (EventWithResponse & { isCancelled?: boolean })[];
   onDateClick?: (date: Date) => void;
   onEventClick?: (event: EventWithResponse) => void;
+  onTimeSlotClick?: (date: Date, time: string) => void;
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export function CalendarWeekView({ selectedDate, events, onDateClick, onEventClick }: CalendarWeekViewProps) {
+export function CalendarWeekView({ selectedDate, events, onDateClick, onEventClick, onTimeSlotClick }: CalendarWeekViewProps) {
   const weekDays = useMemo(() => {
     const start = startOfWeek(selectedDate, { weekStartsOn: 0 });
     return Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -29,15 +31,9 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
     return { top: hours * 60 + minutes, height: 60 };
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "low":
-        return "bg-blue-500/90";
-      case "high":
-        return "bg-red-500/90";
-      default:
-        return "bg-orange-500/90";
-    }
+  const handleTimeSlotClick = (day: Date, hour: number) => {
+    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+    onTimeSlotClick?.(day, timeStr);
   };
 
   return (
@@ -50,7 +46,7 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
             <div
               key={day.toISOString()}
               onClick={() => onDateClick?.(day)}
-              className={`flex-1 text-center py-3 cursor-pointer hover:bg-secondary/50 transition-colors ${
+              className={`flex-1 text-center py-3 cursor-pointer hover:bg-secondary/50 transition-colors border-r border-border/30 last:border-r-0 ${
                 isToday(day) ? "bg-primary/10" : ""
               }`}
             >
@@ -78,7 +74,11 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
               </div>
               <div className="flex-1 flex border-t border-border/50">
                 {weekDays.map((day) => (
-                  <div key={day.toISOString()} className="flex-1 border-r border-border/30 last:border-r-0" />
+                  <div 
+                    key={day.toISOString()} 
+                    className="flex-1 border-r border-border/30 last:border-r-0 cursor-pointer hover:bg-primary/5 transition-colors"
+                    onClick={() => handleTimeSlotClick(day, hour)}
+                  />
                 ))}
               </div>
             </div>
@@ -93,12 +93,16 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
                   {dayEvents.map((event) => {
                     const { top, height } = getEventPosition(event);
                     const isInactive = event.isCancelled || event.is_completed;
+                    const categoryColor = getCategoryColor((event as any).category);
                     
                     return (
                       <div
                         key={event.id}
-                        onClick={() => onEventClick?.(event)}
-                        className={`absolute left-0.5 right-0.5 rounded px-1 py-0.5 cursor-pointer transition-opacity hover:opacity-80 ${getPriorityColor(event.priority)} ${isInactive ? "opacity-50" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEventClick?.(event);
+                        }}
+                        className={`absolute left-0.5 right-0.5 rounded px-1 py-0.5 cursor-pointer transition-opacity hover:opacity-80 ${categoryColor} ${isInactive ? "opacity-50" : ""}`}
                         style={{ top: `${top}px`, minHeight: `${Math.max(height, 20)}px` }}
                       >
                         <div className={`text-white text-[10px] font-medium truncate ${isInactive ? "line-through" : ""}`}>

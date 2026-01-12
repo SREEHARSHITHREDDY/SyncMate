@@ -1,16 +1,18 @@
 import { useMemo } from "react";
 import { format, parseISO, isSameDay } from "date-fns";
 import { EventWithResponse } from "@/hooks/useEvents";
+import { getCategoryColor } from "@/lib/eventCategories";
 
 interface CalendarDayViewProps {
   selectedDate: Date;
   events: (EventWithResponse & { isCancelled?: boolean })[];
   onEventClick?: (event: EventWithResponse) => void;
+  onTimeSlotClick?: (date: Date, time: string) => void;
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export function CalendarDayView({ selectedDate, events, onEventClick }: CalendarDayViewProps) {
+export function CalendarDayView({ selectedDate, events, onEventClick, onTimeSlotClick }: CalendarDayViewProps) {
   const dayEvents = useMemo(() => {
     return events.filter((event) => {
       const eventDate = parseISO(event.event_date);
@@ -26,15 +28,9 @@ export function CalendarDayView({ selectedDate, events, onEventClick }: Calendar
     return { top: hours * 60 + minutes, height: 60 }; // Assume 1 hour duration
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "low":
-        return "bg-blue-500/90 border-blue-600";
-      case "high":
-        return "bg-red-500/90 border-red-600";
-      default:
-        return "bg-orange-500/90 border-orange-600";
-    }
+  const handleTimeSlotClick = (hour: number) => {
+    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+    onTimeSlotClick?.(selectedDate, timeStr);
   };
 
   return (
@@ -51,15 +47,18 @@ export function CalendarDayView({ selectedDate, events, onEventClick }: Calendar
           <div className="flex">
             <div className="w-16 text-xs text-muted-foreground pr-2 text-right">all-day</div>
             <div className="flex-1 space-y-1">
-              {allDayEvents.map((event) => (
-                <div
-                  key={event.id}
-                  onClick={() => onEventClick?.(event)}
-                  className={`px-3 py-2 rounded text-white text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 ${getPriorityColor(event.priority)} ${event.isCancelled || event.is_completed ? "opacity-50 line-through" : ""}`}
-                >
-                  {event.title}
-                </div>
-              ))}
+              {allDayEvents.map((event) => {
+                const categoryColor = getCategoryColor((event as any).category);
+                return (
+                  <div
+                    key={event.id}
+                    onClick={() => onEventClick?.(event)}
+                    className={`px-3 py-2 rounded text-white text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 ${categoryColor} ${event.isCancelled || event.is_completed ? "opacity-50 line-through" : ""}`}
+                  >
+                    {event.title}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -72,13 +71,20 @@ export function CalendarDayView({ selectedDate, events, onEventClick }: Calendar
           {HOURS.map((hour) => (
             <div
               key={hour}
-              className="absolute left-0 right-0 flex"
+              className="absolute left-0 right-0 flex group"
               style={{ top: `${hour * 60}px`, height: "60px" }}
             >
               <div className="w-16 text-xs text-muted-foreground pr-2 text-right -mt-2">
                 {format(new Date().setHours(hour, 0), "h a")}
               </div>
-              <div className="flex-1 border-t border-border/50" />
+              <div 
+                className="flex-1 border-t border-border/50 cursor-pointer hover:bg-primary/5 transition-colors"
+                onClick={() => handleTimeSlotClick(hour)}
+              >
+                <div className="opacity-0 group-hover:opacity-100 text-xs text-muted-foreground p-1 transition-opacity">
+                  + Add event
+                </div>
+              </div>
             </div>
           ))}
 
@@ -87,12 +93,16 @@ export function CalendarDayView({ selectedDate, events, onEventClick }: Calendar
             {timedEvents.map((event) => {
               const { top, height } = getEventPosition(event);
               const isInactive = event.isCancelled || event.is_completed;
+              const categoryColor = getCategoryColor((event as any).category);
               
               return (
                 <div
                   key={event.id}
-                  onClick={() => onEventClick?.(event)}
-                  className={`absolute left-1 right-1 rounded px-2 py-1 border-l-4 cursor-pointer transition-opacity hover:opacity-80 ${getPriorityColor(event.priority)} ${isInactive ? "opacity-50" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEventClick?.(event);
+                  }}
+                  className={`absolute left-1 right-1 rounded px-2 py-1 border-l-4 cursor-pointer transition-opacity hover:opacity-80 ${categoryColor} ${isInactive ? "opacity-50" : ""}`}
                   style={{ top: `${top}px`, minHeight: `${height}px` }}
                 >
                   <div className={`text-white text-sm font-medium ${isInactive ? "line-through" : ""}`}>

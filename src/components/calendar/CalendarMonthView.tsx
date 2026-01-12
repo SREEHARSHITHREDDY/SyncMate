@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { format, parseISO, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMonth, startOfWeek, endOfWeek } from "date-fns";
 import { EventWithResponse } from "@/hooks/useEvents";
+import { getCategoryColor } from "@/lib/eventCategories";
 import {
   Tooltip,
   TooltipContent,
@@ -30,17 +31,6 @@ export function CalendarMonthView({ selectedDate, events, onDateClick, onEventCl
       const eventDate = parseISO(event.event_date);
       return isSameDay(eventDate, day);
     });
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "low":
-        return "bg-blue-500";
-      case "high":
-        return "bg-red-500";
-      default:
-        return "bg-orange-500";
-    }
   };
 
   const weeks = useMemo(() => {
@@ -87,6 +77,8 @@ export function CalendarMonthView({ selectedDate, events, onDateClick, onEventCl
                   <div className="space-y-0.5">
                     {dayEvents.slice(0, 3).map((event) => {
                       const isInactive = event.isCancelled || event.is_completed;
+                      const categoryColor = getCategoryColor((event as any).category);
+                      
                       return (
                         <Tooltip key={event.id}>
                           <TooltipTrigger asChild>
@@ -95,7 +87,7 @@ export function CalendarMonthView({ selectedDate, events, onDateClick, onEventCl
                                 e.stopPropagation();
                                 onEventClick?.(event);
                               }}
-                              className={`text-[11px] px-1.5 py-0.5 rounded text-white truncate cursor-pointer transition-opacity hover:opacity-80 ${getPriorityColor(event.priority)} ${isInactive ? "opacity-50 line-through" : ""}`}
+                              className={`text-[11px] px-1.5 py-0.5 rounded text-white truncate cursor-pointer transition-opacity hover:opacity-80 ${categoryColor} ${isInactive ? "opacity-50 line-through" : ""}`}
                             >
                               {event.event_time.slice(0, 5)} {event.title}
                             </div>
