@@ -2,12 +2,15 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, UserPlus, Users, Check, X, Loader2 } from "lucide-react";
+import { Search, UserPlus, Users, Check, X, Loader2, CalendarDays, Eye } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFriends, Profile } from "@/hooks/useFriends";
+import { useCalendarPermissions, CalendarPermission } from "@/hooks/useCalendarPermissions";
 import { useToast } from "@/hooks/use-toast";
+import { FriendCalendarCard } from "@/components/FriendCalendarCard";
+import { CalendarPermissionDialog } from "@/components/CalendarPermissionDialog";
 
 export default function Friends() {
   const { user, loading } = useAuth();
@@ -16,6 +19,7 @@ export default function Friends() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [selectedPermission, setSelectedPermission] = useState<CalendarPermission | null>(null);
 
   const {
     friends,
@@ -30,6 +34,20 @@ export default function Friends() {
     rejectingRequest,
     searchUsers,
   } = useFriends();
+
+  const {
+    pendingReceivedRequests,
+    receivedRequestsLoading,
+    requestPermission,
+    requestingPermission,
+    acceptPermission,
+    acceptingPermission,
+    rejectPermission,
+    rejectingPermission,
+    deletePermission,
+    deletingPermission,
+    getPermissionStatus,
+  } = useCalendarPermissions();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -114,6 +132,77 @@ export default function Friends() {
     }
   };
 
+  const handleRequestCalendarPermission = async (friendUserId: string) => {
+    try {
+      await requestPermission(friendUserId);
+      toast({
+        title: "Request sent!",
+        description: "Calendar access request has been sent.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to send request",
+        description: error.message || "Something went wrong",
+      });
+    }
+  };
+
+  const handleViewCalendar = (friendUserId: string) => {
+    navigate(`/friend-calendar/${friendUserId}`);
+  };
+
+  const handleRevokeCalendarRequest = async (permissionId: string) => {
+    try {
+      await deletePermission(permissionId);
+      toast({
+        title: "Request removed",
+        description: "Calendar access request has been removed.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to remove request",
+        description: error.message || "Something went wrong",
+      });
+    }
+  };
+
+  const handleAcceptCalendarPermission = async (
+    permissionId: string,
+    viewFromDate?: string | null
+  ) => {
+    try {
+      await acceptPermission({ permissionId, viewFromDate });
+      toast({
+        title: "Access granted!",
+        description: "They can now view your calendar.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to grant access",
+        description: error.message || "Something went wrong",
+      });
+    }
+  };
+
+  const handleRejectCalendarPermission = async (permissionId: string) => {
+    try {
+      await rejectPermission(permissionId);
+      toast({
+        title: "Access declined",
+        description: "The calendar access request has been declined.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to decline access",
+        description: error.message || "Something went wrong",
+      });
+    }
+  };
+
   return (
     <AppLayout>
       <div className="container py-8">
@@ -175,6 +264,60 @@ export default function Friends() {
                   </Button>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Calendar Access Requests */}
+        {pendingReceivedRequests.length > 0 && (
+          <Card className="mb-6 animate-fade-in" style={{ animationDelay: '0.12s' }}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Eye className="h-5 w-5 text-accent" />
+                Calendar Access Requests
+                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-accent text-accent-foreground">
+                  {pendingReceivedRequests.length}
+                </span>
+              </CardTitle>
+              <CardDescription>Friends who want to view your calendar</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {receivedRequestsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingReceivedRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <span className="text-sm font-medium text-primary">
+                            {request.profile?.name?.charAt(0).toUpperCase() || "?"}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium">{request.profile?.name || "Unknown"}</p>
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <CalendarDays className="h-3 w-3" />
+                            Wants to view your calendar
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedPermission(request)}
+                      >
+                        Review
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -267,22 +410,16 @@ export default function Friends() {
               ) : friends.length > 0 ? (
                 <div className="space-y-3">
                   {friends.map((friend) => (
-                    <div
+                    <FriendCalendarCard
                       key={friend.id}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary/50 transition-colors"
-                    >
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-sm font-medium text-primary">
-                          {friend.profile?.name?.charAt(0).toUpperCase() || "?"}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium">{friend.profile?.name || "Unknown"}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {friend.profile?.email || ""}
-                        </p>
-                      </div>
-                    </div>
+                      friend={friend}
+                      permission={getPermissionStatus(friend.profile?.user_id || "")}
+                      onRequestPermission={handleRequestCalendarPermission}
+                      onViewCalendar={handleViewCalendar}
+                      onRevokeRequest={handleRevokeCalendarRequest}
+                      isRequesting={requestingPermission}
+                      isRevoking={deletingPermission}
+                    />
                   ))}
                 </div>
               ) : (
@@ -302,6 +439,19 @@ export default function Friends() {
           </Card>
         </div>
       </div>
+
+      {/* Calendar Permission Dialog */}
+      {selectedPermission && (
+        <CalendarPermissionDialog
+          open={!!selectedPermission}
+          onOpenChange={(open) => !open && setSelectedPermission(null)}
+          permission={selectedPermission}
+          onAccept={handleAcceptCalendarPermission}
+          onReject={handleRejectCalendarPermission}
+          isAccepting={acceptingPermission}
+          isRejecting={rejectingPermission}
+        />
+      )}
     </AppLayout>
   );
 }

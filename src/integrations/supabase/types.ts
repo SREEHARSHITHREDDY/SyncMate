@@ -148,6 +148,36 @@ export type Database = {
           },
         ]
       }
+      calendar_permissions: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          status: string
+          updated_at: string
+          view_from_date: string | null
+          viewer_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          status?: string
+          updated_at?: string
+          view_from_date?: string | null
+          viewer_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          status?: string
+          updated_at?: string
+          view_from_date?: string | null
+          viewer_id?: string
+        }
+        Relationships: []
+      }
       event_exceptions: {
         Row: {
           created_at: string
@@ -530,6 +560,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_view_calendar: { Args: { target_user_id: string }; Returns: boolean }
       create_action_item_notification: {
         Args: {
           p_action_item_content: string
