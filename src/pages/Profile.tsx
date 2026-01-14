@@ -26,11 +26,11 @@ export default function Profile() {
   }, [user, authLoading, navigate]);
 
   // Initialize name when profile loads
-  useState(() => {
+  useEffect(() => {
     if (profile?.name && !hasChanges) {
       setName(profile.name);
     }
-  });
+  }, [profile?.name, hasChanges]);
 
   const handleNameChange = (value: string) => {
     setName(value);
