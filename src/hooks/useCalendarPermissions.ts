@@ -143,6 +143,28 @@ export function useCalendarPermissions() {
     },
   });
 
+  // Update view_from_date for an existing permission
+  const updateViewFromDateMutation = useMutation({
+    mutationFn: async ({
+      permissionId,
+      viewFromDate,
+    }: {
+      permissionId: string;
+      viewFromDate: string | null;
+    }) => {
+      const { error } = await supabase
+        .from("calendar_permissions")
+        .update({ view_from_date: viewFromDate })
+        .eq("id", permissionId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-permissions-sent"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-permissions-received"] });
+    },
+  });
+
   // Helper to check if I can view a specific user's calendar
   const canViewCalendar = (ownerId: string): CalendarPermission | undefined => {
     const permissions = sentRequestsQuery.data || [];
@@ -179,6 +201,8 @@ export function useCalendarPermissions() {
     rejectingPermission: rejectPermissionMutation.isPending,
     deletePermission: deletePermissionMutation.mutateAsync,
     deletingPermission: deletePermissionMutation.isPending,
+    updateViewFromDate: updateViewFromDateMutation.mutateAsync,
+    updatingViewFromDate: updateViewFromDateMutation.isPending,
     canViewCalendar,
     getPermissionStatus,
     getFriendPermission,
