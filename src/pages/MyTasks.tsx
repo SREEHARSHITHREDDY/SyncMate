@@ -44,28 +44,12 @@ import {
 } from "@/components/ui/tooltip";
 import { TaskEditDialog } from "@/components/TaskEditDialog";
 import { TagBadge, getTagColor } from "@/components/TagInput";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+// Drag-and-drop temporarily disabled to fix navigation issues
 
 
 type FilterType = "all" | "overdue" | "today" | "upcoming" | "no-date";
 type PriorityFilterType = "all" | TaskPriority;
-type SortType = "custom" | "due-date" | "created" | "event" | "priority";
+type SortType = "due-date" | "created" | "event" | "priority";
 type SortDirection = "asc" | "desc";
 type TabType = "active" | "completed";
 
@@ -89,7 +73,7 @@ export default function MyTasks() {
   const [filter, setFilter] = useState<FilterType>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilterType>("all");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortType>("custom");
+  const [sortBy, setSortBy] = useState<SortType>("due-date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -98,19 +82,7 @@ export default function MyTasks() {
   const [editingItem, setEditingItem] = useState<UserActionItem | null>(null);
   const [localItems, setLocalItems] = useState<UserActionItem[]>([]);
   const queryClient = useQueryClient();
-
-  // DnD Sensors - use delay constraint to prevent interfering with quick clicks
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        delay: 150,
-        tolerance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  // Drag-and-drop disabled - just use localItems for display
 
   // ALL useCallback hooks MUST be before conditional returns
   const toggleSelectAll = useCallback(() => {
@@ -278,68 +250,32 @@ export default function MyTasks() {
   });
 
   // Sort items
-  const sortedItems = sortBy === "custom" 
-    ? filteredItems 
-    : [...filteredItems].sort((a, b) => {
-        let comparison = 0;
-        const priorityOrder: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
-        
-        switch (sortBy) {
-          case "due-date":
-            if (!a.due_date && !b.due_date) comparison = 0;
-            else if (!a.due_date) comparison = 1;
-            else if (!b.due_date) comparison = -1;
-            else comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-            break;
-          case "created":
-            comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-            break;
-          case "event":
-            comparison = (a.event_title || "").localeCompare(b.event_title || "");
-            break;
-          case "priority":
-            comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
-            break;
-        }
-        
-        return sortDirection === "desc" ? -comparison : comparison;
-      });
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    let comparison = 0;
+    const priorityOrder: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
     
-    if (!over || active.id === over.id) return;
-    
-    const oldIndex = localItems.findIndex(item => item.id === active.id);
-    const newIndex = localItems.findIndex(item => item.id === over.id);
-    
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    // Optimistically update local state
-    const newItems = arrayMove(localItems, oldIndex, newIndex);
-    setLocalItems(newItems);
-
-    // Update sort_order in database
-    try {
-      const updates = newItems.map((item, index) => ({
-        id: item.id,
-        sort_order: index,
-      }));
-
-      for (const update of updates) {
-        await supabase
-          .from("action_items")
-          .update({ sort_order: update.sort_order })
-          .eq("id", update.id);
-      }
-
-      toast.success("Task order updated");
-    } catch (error) {
-      // Revert on error
-      setLocalItems(activeTab === "active" ? actionItems : completedItems);
-      toast.error("Failed to update task order");
+    switch (sortBy) {
+      case "due-date":
+        if (!a.due_date && !b.due_date) comparison = 0;
+        else if (!a.due_date) comparison = 1;
+        else if (!b.due_date) comparison = -1;
+        else comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+        break;
+      case "created":
+        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        break;
+      case "event":
+        comparison = (a.event_title || "").localeCompare(b.event_title || "");
+        break;
+      case "priority":
+        comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
+        break;
     }
-  };
+    
+    return sortDirection === "desc" ? -comparison : comparison;
+  });
+
+  // Drag-and-drop handler removed to fix navigation issues
 
   const handleToggleComplete = async (item: UserActionItem) => {
     setProcessingIds(prev => new Set(prev).add(item.id));
@@ -604,27 +540,24 @@ export default function MyTasks() {
                           <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="custom">Custom Order</SelectItem>
                           <SelectItem value="due-date">Due Date</SelectItem>
                           <SelectItem value="priority">Priority</SelectItem>
                           <SelectItem value="created">Created</SelectItem>
                           <SelectItem value="event">Event</SelectItem>
                         </SelectContent>
                       </Select>
-                      {sortBy !== "custom" && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
-                          className="h-8 w-8 p-0"
-                        >
-                          {sortDirection === "asc" ? (
-                            <SortAsc className="h-4 w-4" />
-                          ) : (
-                            <SortDesc className="h-4 w-4" />
-                          )}
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
+                        className="h-8 w-8 p-0"
+                      >
+                        {sortDirection === "asc" ? (
+                          <SortAsc className="h-4 w-4" />
+                        ) : (
+                          <SortDesc className="h-4 w-4" />
+                        )}
+                      </Button>
                     </div>
                   </div>
 
@@ -738,7 +671,6 @@ export default function MyTasks() {
                     <CardTitle className="text-lg">Tasks</CardTitle>
                     <CardDescription>
                       {sortedItems.length} task{sortedItems.length !== 1 ? "s" : ""} shown
-                      {sortBy === "custom" && " • Drag to reorder"}
                     </CardDescription>
                   </div>
                   {sortedItems.length > 0 && (
@@ -772,32 +704,6 @@ export default function MyTasks() {
                        "Action items will appear here when assigned."}
                     </p>
                   </div>
-                ) : sortBy === "custom" ? (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <SortableContext
-                      items={sortedItems.map(item => item.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="space-y-2">
-                        {sortedItems.map((item) => (
-                          <SortableTaskItem
-                            key={item.id}
-                            item={item}
-                            isSelected={selectedItems.has(item.id)}
-                            isProcessing={processingIds.has(item.id)}
-                            onToggleSelect={() => toggleSelectItem(item.id)}
-                            onComplete={() => handleToggleComplete(item)}
-                            onEdit={() => setEditingItem(item)}
-                            getDueDateInfo={getDueDateInfo}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
                 ) : (
                   <div className="space-y-2">
                     {sortedItems.map((item) => (
@@ -1172,47 +1078,4 @@ function TaskItem(props: TaskItemBaseProps) {
   );
 }
 
-// Sortable Task Item (with drag-and-drop hooks - ONLY use inside DndContext)
-function SortableTaskItem(props: TaskItemBaseProps) {
-  const { item, isProcessing } = props;
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  const dueDateInfo = props.getDueDateInfo(item.due_date);
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
-        item.priority === "high" && "border-l-4 border-l-priority-high",
-        item.priority === "medium" && "border-l-4 border-l-priority-medium",
-        item.priority === "low" && "border-l-4 border-l-priority-low",
-        dueDateInfo?.isOverdue && "border-destructive/50 bg-destructive/5",
-        dueDateInfo?.isToday && !dueDateInfo?.isOverdue && "border-primary/50 bg-primary/5",
-        props.isSelected && "ring-2 ring-primary/50",
-        isDragging && "opacity-50 shadow-lg",
-        "hover:bg-accent/30"
-      )}
-    >
-      <TaskItemContent 
-        {...props} 
-        showDragHandle={true}
-        isDragging={isDragging}
-        dragHandleProps={{ ...attributes, ...listeners }}
-      />
-    </div>
-  );
-}
+// SortableTaskItem removed - drag-and-drop disabled to fix navigation issues
