@@ -110,6 +110,21 @@ export default function MyTasks() {
     })
   );
 
+  // ALL useCallback hooks MUST be before conditional returns
+  const toggleSelectAll = useCallback(() => {
+    setSelectedItems(prev => {
+      if (prev.size > 0) {
+        return new Set();
+      }
+      return new Set(localItems.map(item => item.id));
+    });
+  }, [localItems]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedItems(new Set());
+  }, []);
+
+  // ALL useEffect hooks MUST be before conditional returns
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/auth");
@@ -124,6 +139,49 @@ export default function MyTasks() {
       setLocalItems(completedItems);
     }
   }, [actionItems, completedItems, activeTab]);
+
+  // Clear selection when switching tabs
+  useEffect(() => {
+    setSelectedItems(new Set());
+    setTagFilter(null);
+    setPriorityFilter("all");
+  }, [activeTab]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if user is not authenticated yet
+      if (!user) return;
+      
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        if (e.key !== "Escape") return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === "a" && !e.shiftKey) {
+        e.preventDefault();
+        toggleSelectAll();
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        clearSelection();
+        return;
+      }
+
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedItems.size > 0) {
+        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
+          e.preventDefault();
+          setShowBulkDeleteDialog(true);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [user, toggleSelectAll, clearSelection, selectedItems]);
 
   if (authLoading) {
     return null;
@@ -418,67 +476,6 @@ export default function MyTasks() {
     });
   };
 
-  const toggleSelectAll = useCallback(() => {
-    if (selectedItems.size === sortedItems.length && sortedItems.length > 0) {
-      setSelectedItems(new Set());
-    } else {
-      setSelectedItems(new Set(sortedItems.map(item => item.id)));
-    }
-  }, [selectedItems.size, sortedItems]);
-
-  const clearSelection = useCallback(() => {
-    setSelectedItems(new Set());
-  }, []);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-        if (e.key !== "Escape") return;
-      }
-
-      if ((e.metaKey || e.ctrlKey) && e.key === "a" && !e.shiftKey) {
-        e.preventDefault();
-        toggleSelectAll();
-        return;
-      }
-
-      if (e.key === "Escape") {
-        e.preventDefault();
-        clearSelection();
-        return;
-      }
-
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedItems.size > 0) {
-        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
-          e.preventDefault();
-          setShowBulkDeleteDialog(true);
-        }
-        return;
-      }
-
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && selectedItems.size > 0) {
-        e.preventDefault();
-        if (activeTab === "active") {
-          handleBulkComplete();
-        } else {
-          handleBulkRestore();
-        }
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleSelectAll, clearSelection, selectedItems, activeTab]);
-
-  // Clear selection when switching tabs
-  useEffect(() => {
-    setSelectedItems(new Set());
-    setTagFilter(null);
-    setPriorityFilter("all");
-  }, [activeTab]);
 
   return (
     <AppLayout>
