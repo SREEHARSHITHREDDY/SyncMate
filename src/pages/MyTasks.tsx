@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isPast, isToday, isTomorrow, parseISO, differenceInDays } from "date-fns";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -81,6 +81,8 @@ const RECURRENCE_LABELS: Record<string, string> = {
 };
 
 export default function MyTasks() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const { actionItems, completedItems, allTags, isLoading, overdueCount, totalCount, completedCount } = useUserActionItems(true);
   const [activeTab, setActiveTab] = useState<TabType>("active");
   const [filter, setFilter] = useState<FilterType>("all");
@@ -95,7 +97,12 @@ export default function MyTasks() {
   const [editingItem, setEditingItem] = useState<UserActionItem | null>(null);
   const [localItems, setLocalItems] = useState<UserActionItem[]>([]);
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth");
+    }
+  }, [user, authLoading, navigate]);
 
   // Keep local items in sync with server items
   useEffect(() => {
@@ -105,6 +112,14 @@ export default function MyTasks() {
       setLocalItems(completedItems);
     }
   }, [actionItems, completedItems, activeTab]);
+
+  if (authLoading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
 
   // DnD Sensors
   const sensors = useSensors(
