@@ -62,30 +62,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-// Custom pointer sensor that ONLY activates on drag handles
-// This prevents the sensor from blocking navigation and other clicks
-class SafePointerSensor extends PointerSensor {
-  static activators = [
-    {
-      eventName: "onPointerDown" as const,
-      handler: ({ nativeEvent: event }: React.PointerEvent) => {
-        const target = event.target as Element;
-        
-        // Only activate if clicking on or within a drag handle
-        const isDragHandle = target.closest("[data-drag-handle]");
-        if (!isDragHandle) {
-          return false;
-        }
-        
-        if (!event.isPrimary || event.button !== 0) {
-          return false;
-        }
-        
-        return true;
-      },
-    },
-  ];
-}
 
 type FilterType = "all" | "overdue" | "today" | "upcoming" | "no-date";
 type PriorityFilterType = "all" | TaskPriority;
@@ -123,11 +99,11 @@ export default function MyTasks() {
   const [localItems, setLocalItems] = useState<UserActionItem[]>([]);
   const queryClient = useQueryClient();
 
-  // DnD Sensors - use SafePointerSensor to prevent blocking navigation clicks
+  // DnD Sensors - use standard PointerSensor with distance constraint
   const sensors = useSensors(
-    useSensor(SafePointerSensor, {
+    useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: 10,
       },
     }),
     useSensor(KeyboardSensor, {
