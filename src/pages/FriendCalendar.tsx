@@ -34,6 +34,14 @@ export default function FriendCalendar() {
     }
   }, [user, authLoading, navigate]);
 
+  if (authLoading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
+
   useEffect(() => {
     if (friendId && user) {
       const perm = canViewCalendar(friendId);

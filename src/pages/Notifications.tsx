@@ -34,6 +34,14 @@ export default function Notifications() {
     }
   }, [user, loading, navigate]);
 
+  if (loading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
+
   const handleMarkAsRead = async (id: string) => {
     try {
       await markAsRead(id);

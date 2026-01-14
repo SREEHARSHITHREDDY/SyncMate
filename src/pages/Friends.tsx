@@ -57,6 +57,14 @@ export default function Friends() {
     }
   }, [user, loading, navigate]);
 
+  if (loading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
+
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(async () => {

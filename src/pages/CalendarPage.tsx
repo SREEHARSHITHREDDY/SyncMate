@@ -96,6 +96,14 @@ export default function CalendarPage() {
     }
   }, [user, loading, navigate]);
 
+  if (loading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
+
   const goToPrev = () => {
     switch (viewMode) {
       case "day":
