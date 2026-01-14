@@ -37,6 +37,7 @@ export default function Friends() {
 
   const {
     pendingReceivedRequests,
+    receivedRequests,
     receivedRequestsLoading,
     requestPermission,
     requestingPermission,
@@ -47,6 +48,7 @@ export default function Friends() {
     deletePermission,
     deletingPermission,
     getPermissionStatus,
+    getFriendPermission,
   } = useCalendarPermissions();
 
   useEffect(() => {
@@ -198,6 +200,22 @@ export default function Friends() {
       toast({
         variant: "destructive",
         title: "Failed to decline access",
+        description: error.message || "Something went wrong",
+      });
+    }
+  };
+
+  const handleRevokeCalendarAccess = async (permissionId: string, friendName: string) => {
+    try {
+      await deletePermission(permissionId);
+      toast({
+        title: "Access revoked",
+        description: `${friendName} can no longer view your calendar.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to revoke access",
         description: error.message || "Something went wrong",
       });
     }
@@ -414,9 +432,11 @@ export default function Friends() {
                       key={friend.id}
                       friend={friend}
                       permission={getPermissionStatus(friend.profile?.user_id || "")}
+                      friendPermission={getFriendPermission(friend.profile?.user_id || "")}
                       onRequestPermission={handleRequestCalendarPermission}
                       onViewCalendar={handleViewCalendar}
                       onRevokeRequest={handleRevokeCalendarRequest}
+                      onRevokeAccess={handleRevokeCalendarAccess}
                       isRequesting={requestingPermission}
                       isRevoking={deletingPermission}
                     />
