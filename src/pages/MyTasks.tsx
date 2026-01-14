@@ -789,7 +789,6 @@ export default function MyTasks() {
                             item={item}
                             isSelected={selectedItems.has(item.id)}
                             isProcessing={processingIds.has(item.id)}
-                            isDraggable={true}
                             onToggleSelect={() => toggleSelectItem(item.id)}
                             onComplete={() => handleToggleComplete(item)}
                             onEdit={() => setEditingItem(item)}
@@ -802,12 +801,11 @@ export default function MyTasks() {
                 ) : (
                   <div className="space-y-2">
                     {sortedItems.map((item) => (
-                      <SortableTaskItem
+                      <TaskItem
                         key={item.id}
                         item={item}
                         isSelected={selectedItems.has(item.id)}
                         isProcessing={processingIds.has(item.id)}
-                        isDraggable={false}
                         onToggleSelect={() => toggleSelectItem(item.id)}
                         onComplete={() => handleToggleComplete(item)}
                         onEdit={() => setEditingItem(item)}
@@ -1008,67 +1006,43 @@ export default function MyTasks() {
   );
 }
 
-// Sortable Task Item Component
-interface SortableTaskItemProps {
+// Base Task Item Props (shared between sortable and non-sortable)
+interface TaskItemBaseProps {
   item: UserActionItem;
   isSelected: boolean;
   isProcessing: boolean;
-  isDraggable: boolean;
   onToggleSelect: () => void;
   onComplete: () => void;
   onEdit: () => void;
   getDueDateInfo: (dueDate: string | null) => { label: string; isOverdue: boolean; isUrgent: boolean; isToday: boolean } | null;
 }
 
-function SortableTaskItem({
+// Shared Task Item Content (used by both sortable and non-sortable)
+function TaskItemContent({
   item,
   isSelected,
   isProcessing,
-  isDraggable,
   onToggleSelect,
   onComplete,
   onEdit,
   getDueDateInfo,
-}: SortableTaskItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id, disabled: !isDraggable });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
+  dragHandleProps,
+  showDragHandle = false,
+  isDragging = false,
+}: TaskItemBaseProps & { 
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+  showDragHandle?: boolean;
+  isDragging?: boolean;
+}) {
   const dueDateInfo = getDueDateInfo(item.due_date);
-
   const priorityConfig = PRIORITY_CONFIG[item.priority];
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
-        item.priority === "high" && "border-l-4 border-l-priority-high",
-        item.priority === "medium" && "border-l-4 border-l-priority-medium",
-        item.priority === "low" && "border-l-4 border-l-priority-low",
-        dueDateInfo?.isOverdue && "border-destructive/50 bg-destructive/5",
-        dueDateInfo?.isToday && !dueDateInfo?.isOverdue && "border-primary/50 bg-primary/5",
-        isSelected && "ring-2 ring-primary/50",
-        isDragging && "opacity-50 shadow-lg",
-        "hover:bg-accent/30"
-      )}
-    >
-      {isDraggable && (
+    <>
+      {showDragHandle && (
         <button
           data-drag-handle
-          {...attributes}
-          {...listeners}
+          {...dragHandleProps}
           className="cursor-grab active:cursor-grabbing touch-none p-1 -ml-1 text-muted-foreground hover:text-foreground"
         >
           <GripVertical className="h-4 w-4" />
@@ -1171,6 +1145,74 @@ function SortableTaskItem({
           <TooltipContent>Mark as complete</TooltipContent>
         </Tooltip>
       </div>
+    </>
+  );
+}
+
+// Non-sortable Task Item (no drag-and-drop hooks)
+function TaskItem(props: TaskItemBaseProps) {
+  const { item, isProcessing } = props;
+  const dueDateInfo = props.getDueDateInfo(item.due_date);
+
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
+        item.priority === "high" && "border-l-4 border-l-priority-high",
+        item.priority === "medium" && "border-l-4 border-l-priority-medium",
+        item.priority === "low" && "border-l-4 border-l-priority-low",
+        dueDateInfo?.isOverdue && "border-destructive/50 bg-destructive/5",
+        dueDateInfo?.isToday && !dueDateInfo?.isOverdue && "border-primary/50 bg-primary/5",
+        props.isSelected && "ring-2 ring-primary/50",
+        "hover:bg-accent/30"
+      )}
+    >
+      <TaskItemContent {...props} />
+    </div>
+  );
+}
+
+// Sortable Task Item (with drag-and-drop hooks - ONLY use inside DndContext)
+function SortableTaskItem(props: TaskItemBaseProps) {
+  const { item, isProcessing } = props;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const dueDateInfo = props.getDueDateInfo(item.due_date);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
+        item.priority === "high" && "border-l-4 border-l-priority-high",
+        item.priority === "medium" && "border-l-4 border-l-priority-medium",
+        item.priority === "low" && "border-l-4 border-l-priority-low",
+        dueDateInfo?.isOverdue && "border-destructive/50 bg-destructive/5",
+        dueDateInfo?.isToday && !dueDateInfo?.isOverdue && "border-primary/50 bg-primary/5",
+        props.isSelected && "ring-2 ring-primary/50",
+        isDragging && "opacity-50 shadow-lg",
+        "hover:bg-accent/30"
+      )}
+    >
+      <TaskItemContent 
+        {...props} 
+        showDragHandle={true}
+        isDragging={isDragging}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
     </div>
   );
 }
