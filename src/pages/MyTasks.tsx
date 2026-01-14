@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -62,6 +62,48 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+// Custom pointer sensor that requires the drag handle to be used
+// This prevents the sensor from capturing all pointer events
+class SafePointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: "onPointerDown" as const,
+      handler: ({ nativeEvent: event }: React.PointerEvent) => {
+        if (
+          !event.isPrimary ||
+          event.button !== 0 ||
+          isInteractiveElement(event.target as Element)
+        ) {
+          return false;
+        }
+        return true;
+      },
+    },
+  ];
+}
+
+function isInteractiveElement(element: Element | null): boolean {
+  const interactiveElements = [
+    "button",
+    "input",
+    "textarea",
+    "select",
+    "option",
+    "a",
+  ];
+  if (!element) return false;
+
+  if (interactiveElements.includes(element.tagName.toLowerCase())) {
+    return true;
+  }
+
+  if (element.closest("a, button, input, textarea, select")) {
+    return true;
+  }
+
+  return false;
+}
+
 type FilterType = "all" | "overdue" | "today" | "upcoming" | "no-date";
 type PriorityFilterType = "all" | TaskPriority;
 type SortType = "custom" | "due-date" | "created" | "event" | "priority";
@@ -98,9 +140,9 @@ export default function MyTasks() {
   const [localItems, setLocalItems] = useState<UserActionItem[]>([]);
   const queryClient = useQueryClient();
 
-  // DnD Sensors - MUST be before conditional returns
+  // DnD Sensors - use SafePointerSensor to prevent blocking navigation clicks
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(SafePointerSensor, {
       activationConstraint: {
         distance: 8,
       },
@@ -147,12 +189,12 @@ export default function MyTasks() {
     setPriorityFilter("all");
   }, [activeTab]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts - only listen when component is actually mounted and visible
   useEffect(() => {
+    // Don't attach listeners if user is not authenticated
+    if (!user) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if user is not authenticated yet
-      if (!user) return;
-      
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
         if (e.key !== "Escape") return;
