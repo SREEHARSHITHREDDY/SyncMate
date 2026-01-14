@@ -772,7 +772,7 @@ export default function MyTasks() {
                        "Action items will appear here when assigned."}
                     </p>
                   </div>
-                ) : (
+                ) : sortBy === "custom" ? (
                   <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -789,7 +789,7 @@ export default function MyTasks() {
                             item={item}
                             isSelected={selectedItems.has(item.id)}
                             isProcessing={processingIds.has(item.id)}
-                            isDraggable={sortBy === "custom"}
+                            isDraggable={true}
                             onToggleSelect={() => toggleSelectItem(item.id)}
                             onComplete={() => handleToggleComplete(item)}
                             onEdit={() => setEditingItem(item)}
@@ -799,6 +799,22 @@ export default function MyTasks() {
                       </div>
                     </SortableContext>
                   </DndContext>
+                ) : (
+                  <div className="space-y-2">
+                    {sortedItems.map((item) => (
+                      <SortableTaskItem
+                        key={item.id}
+                        item={item}
+                        isSelected={selectedItems.has(item.id)}
+                        isProcessing={processingIds.has(item.id)}
+                        isDraggable={false}
+                        onToggleSelect={() => toggleSelectItem(item.id)}
+                        onComplete={() => handleToggleComplete(item)}
+                        onEdit={() => setEditingItem(item)}
+                        getDueDateInfo={getDueDateInfo}
+                      />
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>
