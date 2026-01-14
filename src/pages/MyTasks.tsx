@@ -128,27 +128,28 @@ export default function MyTasks() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
+      
+      // Don't intercept any events on interactive elements (except Escape)
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-        if (e.key !== "Escape") return;
+        return; // Allow all keys to work normally in inputs
       }
 
+      // Only handle specific keyboard shortcuts for task management
       if ((e.metaKey || e.ctrlKey) && e.key === "a" && !e.shiftKey) {
         e.preventDefault();
         toggleSelectAll();
         return;
       }
 
-      if (e.key === "Escape") {
-        e.preventDefault();
+      // Only clear selection on Escape, don't prevent default
+      if (e.key === "Escape" && selectedItems.size > 0) {
         clearSelection();
         return;
       }
 
       if ((e.key === "Delete" || e.key === "Backspace") && selectedItems.size > 0) {
-        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
-          e.preventDefault();
-          setShowBulkDeleteDialog(true);
-        }
+        e.preventDefault();
+        setShowBulkDeleteDialog(true);
         return;
       }
     };

@@ -26,8 +26,12 @@ export function useKeyboardShortcuts({ shortcuts, enabled = true }: UseKeyboardS
         target.tagName === "TEXTAREA" ||
         target.isContentEditable
       ) {
-        // Allow Escape key in inputs
-        if (event.key !== "Escape") return;
+        return; // Don't capture any events in input fields
+      }
+
+      // Don't intercept link clicks or button events
+      if (target.tagName === "A" || target.tagName === "BUTTON" || target.closest("a") || target.closest("button")) {
+        return;
       }
 
       for (const shortcut of shortcuts) {
