@@ -9,6 +9,7 @@ export interface CalendarPermission {
   viewer_id: string;
   status: "pending" | "accepted" | "rejected";
   view_from_date: string | null;
+  expires_at: string | null;
   created_at: string;
   updated_at: string;
   profile?: Profile;
@@ -91,15 +92,18 @@ export function useCalendarPermissions() {
     mutationFn: async ({
       permissionId,
       viewFromDate,
+      expiresAt,
     }: {
       permissionId: string;
       viewFromDate?: string | null;
+      expiresAt?: string | null;
     }) => {
       const { error } = await supabase
         .from("calendar_permissions")
         .update({
           status: "accepted",
           view_from_date: viewFromDate || null,
+          expires_at: expiresAt || null,
         })
         .eq("id", permissionId);
 
@@ -143,18 +147,24 @@ export function useCalendarPermissions() {
     },
   });
 
-  // Update view_from_date for an existing permission
-  const updateViewFromDateMutation = useMutation({
+  // Update permission settings (view_from_date and expires_at)
+  const updatePermissionMutation = useMutation({
     mutationFn: async ({
       permissionId,
       viewFromDate,
+      expiresAt,
     }: {
       permissionId: string;
-      viewFromDate: string | null;
+      viewFromDate?: string | null;
+      expiresAt?: string | null;
     }) => {
+      const updateData: Record<string, string | null> = {};
+      if (viewFromDate !== undefined) updateData.view_from_date = viewFromDate;
+      if (expiresAt !== undefined) updateData.expires_at = expiresAt;
+
       const { error } = await supabase
         .from("calendar_permissions")
-        .update({ view_from_date: viewFromDate })
+        .update(updateData)
         .eq("id", permissionId);
 
       if (error) throw error;
@@ -201,8 +211,8 @@ export function useCalendarPermissions() {
     rejectingPermission: rejectPermissionMutation.isPending,
     deletePermission: deletePermissionMutation.mutateAsync,
     deletingPermission: deletePermissionMutation.isPending,
-    updateViewFromDate: updateViewFromDateMutation.mutateAsync,
-    updatingViewFromDate: updateViewFromDateMutation.isPending,
+    updatePermission: updatePermissionMutation.mutateAsync,
+    updatingPermission: updatePermissionMutation.isPending,
     canViewCalendar,
     getPermissionStatus,
     getFriendPermission,

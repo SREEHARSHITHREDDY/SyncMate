@@ -172,10 +172,11 @@ export default function Friends() {
 
   const handleAcceptCalendarPermission = async (
     permissionId: string,
-    viewFromDate?: string | null
+    viewFromDate?: string | null,
+    expiresAt?: string | null
   ) => {
     try {
-      await acceptPermission({ permissionId, viewFromDate });
+      await acceptPermission({ permissionId, viewFromDate, expiresAt });
       toast({
         title: "Access granted!",
         description: "They can now view your calendar.",

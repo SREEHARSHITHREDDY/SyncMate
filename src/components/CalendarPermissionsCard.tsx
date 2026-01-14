@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useCalendarPermissions, CalendarPermission } from "@/hooks/useCalendarPermissions";
-import { Loader2, Users, X, Eye, Calendar, Pencil } from "lucide-react";
-import { format } from "date-fns";
+import { Loader2, Users, X, Eye, Calendar, Pencil, Clock } from "lucide-react";
+import { format, isPast, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -17,6 +17,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EditViewFromDateDialog } from "./EditViewFromDateDialog";
+import { Badge } from "@/components/ui/badge";
 
 export function CalendarPermissionsCard() {
   const { toast } = useToast();
@@ -27,8 +28,8 @@ export function CalendarPermissionsCard() {
     receivedRequestsLoading,
     deletePermission,
     deletingPermission,
-    updateViewFromDate,
-    updatingViewFromDate,
+    updatePermission,
+    updatingPermission,
   } = useCalendarPermissions();
 
   // Only show accepted permissions (people who can view my calendar)
@@ -52,14 +53,16 @@ export function CalendarPermissionsCard() {
     }
   };
 
-  const handleUpdateViewFromDate = async (permissionId: string, viewFromDate: string | null) => {
+  const handleUpdatePermission = async (
+    permissionId: string, 
+    viewFromDate: string | null, 
+    expiresAt: string | null
+  ) => {
     try {
-      await updateViewFromDate({ permissionId, viewFromDate });
+      await updatePermission({ permissionId, viewFromDate, expiresAt });
       toast({
         title: "Access updated",
-        description: viewFromDate 
-          ? `They can now view your calendar from ${format(new Date(viewFromDate), "MMM d, yyyy")}.`
-          : "They now have full access to your calendar.",
+        description: "Calendar access settings have been updated.",
       });
     } catch (error: any) {
       toast({
@@ -68,6 +71,11 @@ export function CalendarPermissionsCard() {
         description: error.message || "Something went wrong",
       });
     }
+  };
+
+  const isExpired = (permission: CalendarPermission) => {
+    if (!permission.expires_at) return false;
+    return isPast(parseISO(permission.expires_at));
   };
 
   return (
@@ -89,82 +97,98 @@ export function CalendarPermissionsCard() {
             </div>
           ) : acceptedPermissions.length > 0 ? (
             <div className="space-y-3">
-              {acceptedPermissions.map((permission) => (
-                <div
-                  key={permission.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-sm font-medium text-primary">
-                        {permission.profile?.name?.charAt(0).toUpperCase() || "?"}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium">
-                        {permission.profile?.name || "Unknown"}
-                      </p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {permission.view_from_date ? (
-                          <span>
-                            From {format(new Date(permission.view_from_date), "MMM d, yyyy")}
+              {acceptedPermissions.map((permission) => {
+                const expired = isExpired(permission);
+                return (
+                  <div
+                    key={permission.id}
+                    className={`flex items-center justify-between p-3 rounded-lg bg-secondary/50 ${expired ? 'opacity-60' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-sm font-medium text-primary">
+                          {permission.profile?.name?.charAt(0).toUpperCase() || "?"}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {permission.profile?.name || "Unknown"}
+                          </p>
+                          {expired && (
+                            <Badge variant="destructive" className="text-xs">
+                              Expired
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {permission.view_from_date ? (
+                              <>From {format(new Date(permission.view_from_date), "MMM d, yyyy")}</>
+                            ) : (
+                              "Full access"
+                            )}
                           </span>
-                        ) : (
-                          <span>Full access</span>
-                        )}
+                          {permission.expires_at && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              Expires {format(new Date(permission.expires_at), "MMM d, yyyy")}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setEditingPermission(permission)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          disabled={deletingPermission}
-                        >
-                          {deletingPermission ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <>
-                              <X className="h-4 w-4 mr-1" />
-                              Revoke
-                            </>
-                          )}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Revoke Calendar Access</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to revoke calendar access for{" "}
-                            <strong>{permission.profile?.name || "this user"}</strong>?
-                            They will no longer be able to view your calendar.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleRevoke(permission)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditingPermission(permission)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            disabled={deletingPermission}
                           >
-                            Revoke Access
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                            {deletingPermission ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <X className="h-4 w-4 mr-1" />
+                                Revoke
+                              </>
+                            )}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Revoke Calendar Access</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to revoke calendar access for{" "}
+                              <strong>{permission.profile?.name || "this user"}</strong>?
+                              They will no longer be able to view your calendar.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleRevoke(permission)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Revoke Access
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -187,8 +211,8 @@ export function CalendarPermissionsCard() {
           open={!!editingPermission}
           onOpenChange={(open) => !open && setEditingPermission(null)}
           permission={editingPermission}
-          onSave={handleUpdateViewFromDate}
-          isSaving={updatingViewFromDate}
+          onSave={handleUpdatePermission}
+          isSaving={updatingPermission}
         />
       )}
     </>

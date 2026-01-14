@@ -151,6 +151,7 @@ export type Database = {
       calendar_permissions: {
         Row: {
           created_at: string
+          expires_at: string | null
           id: string
           owner_id: string
           status: string
@@ -160,6 +161,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          expires_at?: string | null
           id?: string
           owner_id: string
           status?: string
@@ -169,6 +171,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          expires_at?: string | null
           id?: string
           owner_id?: string
           status?: string
