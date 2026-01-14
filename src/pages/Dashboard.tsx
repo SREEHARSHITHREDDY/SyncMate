@@ -43,6 +43,14 @@ export default function Dashboard() {
     }
   }, [user, loading, navigate]);
 
+  if (loading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
+
   const userName = user?.user_metadata?.name || "there";
 
   // Filter events by priority and completion status
