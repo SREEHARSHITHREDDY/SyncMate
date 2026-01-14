@@ -21,7 +21,7 @@ interface CalendarPermissionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   permission: CalendarPermission;
-  onAccept: (permissionId: string, viewFromDate?: string | null) => Promise<void>;
+  onAccept: (permissionId: string, viewFromDate?: string | null, expiresAt?: string | null) => Promise<void>;
   onReject: (permissionId: string) => Promise<void>;
   isAccepting: boolean;
   isRejecting: boolean;
@@ -37,12 +37,15 @@ export function CalendarPermissionDialog({
   isRejecting,
 }: CalendarPermissionDialogProps) {
   const [restrictDate, setRestrictDate] = useState(false);
+  const [setExpiration, setSetExpiration] = useState(false);
   const [viewFromDate, setViewFromDate] = useState<Date | undefined>(undefined);
+  const [expiresAt, setExpiresAt] = useState<Date | undefined>(undefined);
 
   const handleAccept = async () => {
     await onAccept(
       permission.id,
-      restrictDate && viewFromDate ? format(viewFromDate, "yyyy-MM-dd") : null
+      restrictDate && viewFromDate ? format(viewFromDate, "yyyy-MM-dd") : null,
+      setExpiration && expiresAt ? format(expiresAt, "yyyy-MM-dd") : null
     );
     onOpenChange(false);
   };
@@ -51,6 +54,10 @@ export function CalendarPermissionDialog({
     await onReject(permission.id);
     onOpenChange(false);
   };
+
+  const isValid = 
+    (!restrictDate || viewFromDate) && 
+    (!setExpiration || expiresAt);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,24 +72,24 @@ export function CalendarPermissionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="restrict-date">Restrict viewing period</Label>
-              <p className="text-sm text-muted-foreground">
-                Only allow viewing events from a specific date
-              </p>
+        <div className="space-y-6 py-4">
+          {/* Start date restriction */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="restrict-date">Restrict viewing period</Label>
+                <p className="text-sm text-muted-foreground">
+                  Only allow viewing events from a specific date
+                </p>
+              </div>
+              <Switch
+                id="restrict-date"
+                checked={restrictDate}
+                onCheckedChange={setRestrictDate}
+              />
             </div>
-            <Switch
-              id="restrict-date"
-              checked={restrictDate}
-              onCheckedChange={setRestrictDate}
-            />
-          </div>
 
-          {restrictDate && (
-            <div className="space-y-2">
-              <Label>Can view from</Label>
+            {restrictDate && (
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -105,11 +112,51 @@ export function CalendarPermissionDialog({
                   />
                 </PopoverContent>
               </Popover>
-              <p className="text-xs text-muted-foreground">
-                They will only see events on or after this date
-              </p>
+            )}
+          </div>
+
+          {/* Expiration date */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="set-expiration">Set expiration</Label>
+                <p className="text-sm text-muted-foreground">
+                  Automatically revoke access after a date
+                </p>
+              </div>
+              <Switch
+                id="set-expiration"
+                checked={setExpiration}
+                onCheckedChange={setSetExpiration}
+              />
             </div>
-          )}
+
+            {setExpiration && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !expiresAt && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {expiresAt ? format(expiresAt, "PPP") : "Pick expiration date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-popover" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={expiresAt}
+                    onSelect={setExpiresAt}
+                    disabled={(date) => date < new Date()}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
@@ -126,7 +173,7 @@ export function CalendarPermissionDialog({
           </Button>
           <Button
             onClick={handleAccept}
-            disabled={isAccepting || isRejecting || (restrictDate && !viewFromDate)}
+            disabled={isAccepting || isRejecting || !isValid}
           >
             {isAccepting ? (
               <Loader2 className="h-4 w-4 animate-spin" />

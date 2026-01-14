@@ -12,9 +12,17 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/useProfile";
+import { useCalendarPermissions } from "@/hooks/useCalendarPermissions";
 import { useState } from "react";
 
-const navItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  badge?: number;
+}
+
+const baseNavItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/my-tasks", label: "My Tasks", icon: ListTodo },
   { href: "/friends", label: "Friends", icon: Users },
@@ -28,6 +36,7 @@ export function Navbar() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
+  const { pendingReceivedRequests } = useCalendarPermissions();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -36,6 +45,14 @@ export function Navbar() {
   };
 
   const isAuthenticated = !!user;
+
+  // Build nav items with badges
+  const navItems: NavItem[] = baseNavItems.map((item) => {
+    if (item.href === "/friends" && pendingReceivedRequests.length > 0) {
+      return { ...item, badge: pendingReceivedRequests.length };
+    }
+    return item;
+  });
 
   const getInitials = (name: string) => {
     return name
@@ -67,12 +84,17 @@ export function Navbar() {
                   key={item.href}
                   to={item.href}
                   className={cn(
-                    "nav-link flex items-center gap-2",
+                    "nav-link flex items-center gap-2 relative",
                     isActive && "active"
                   )}
                 >
                   <item.icon className="h-4 w-4" />
                   {item.label}
+                  {item.badge && item.badge > 0 && (
+                    <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center text-[10px] font-medium rounded-full bg-destructive text-destructive-foreground">
+                      {item.badge > 9 ? "9+" : item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -158,14 +180,21 @@ export function Navbar() {
                       to={item.href}
                       onClick={() => setMobileMenuOpen(false)}
                       className={cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+                        "flex items-center justify-between px-3 py-2 rounded-lg transition-colors",
                         isActive 
                           ? "bg-primary/10 text-primary" 
                           : "text-muted-foreground hover:bg-secondary"
                       )}
                     >
-                      <item.icon className="h-5 w-5" />
-                      {item.label}
+                      <div className="flex items-center gap-3">
+                        <item.icon className="h-5 w-5" />
+                        {item.label}
+                      </div>
+                      {item.badge && item.badge > 0 && (
+                        <span className="h-5 min-w-5 px-1.5 flex items-center justify-center text-xs font-medium rounded-full bg-destructive text-destructive-foreground">
+                          {item.badge > 9 ? "9+" : item.badge}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
