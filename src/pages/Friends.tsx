@@ -51,21 +51,7 @@ export default function Friends() {
     getFriendPermission,
   } = useCalendarPermissions();
 
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate("/auth");
-    }
-  }, [user, loading, navigate]);
-
-  if (loading) {
-    return null;
-  }
-
-  if (!user) {
-    return null;
-  }
-
-  // Debounced search
+  // Debounced search - MUST be before conditional returns
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (searchQuery.trim().length >= 2) {
@@ -92,6 +78,20 @@ export default function Friends() {
 
     return () => clearTimeout(timer);
   }, [searchQuery, friends, pendingRequests, searchUsers]);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const handleSendRequest = async (receiverId: string) => {
     try {

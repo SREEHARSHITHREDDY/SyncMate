@@ -98,6 +98,18 @@ export default function MyTasks() {
   const [localItems, setLocalItems] = useState<UserActionItem[]>([]);
   const queryClient = useQueryClient();
 
+  // DnD Sensors - MUST be before conditional returns
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/auth");
@@ -120,18 +132,6 @@ export default function MyTasks() {
   if (!user) {
     return null;
   }
-
-  // DnD Sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
 
   // Calculate counts for each filter
   const dueTodayCount = actionItems.filter(item => {
