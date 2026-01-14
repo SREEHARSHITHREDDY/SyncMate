@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -7,13 +7,29 @@ import { FileText, Plus, Loader2 } from "lucide-react";
 import { useEventTemplates, EventTemplate } from "@/hooks/useEventTemplates";
 import { EventTemplateCard } from "@/components/EventTemplateCard";
 import { CreateTemplateDialog } from "@/components/CreateTemplateDialog";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Templates() {
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { templates, isLoading, createTemplate, isCreating, updateTemplate, isUpdating, deleteTemplate } =
     useEventTemplates();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EventTemplate | null>(null);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth");
+    }
+  }, [user, authLoading, navigate]);
+
+  if (authLoading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const handleCreate = (template: Omit<EventTemplate, "id" | "user_id" | "created_at" | "updated_at">) => {
     createTemplate(template);

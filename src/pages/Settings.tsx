@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { NotificationPreferencesCard } from "@/components/NotificationPreferencesCard";
 import { CalendarPermissionsCard } from "@/components/CalendarPermissionsCard";
@@ -8,13 +10,27 @@ import { Button } from "@/components/ui/button";
 import { Settings as SettingsIcon, Palette, Monitor, Sun, Moon, Keyboard, User, Mail } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 
 export default function Settings() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
-  const { user } = useAuth();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth");
+    }
+  }, [user, authLoading, navigate]);
+
+  if (authLoading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <AppLayout>

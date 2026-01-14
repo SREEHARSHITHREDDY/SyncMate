@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,13 +8,22 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Camera, Loader2, Trash2, Check } from "lucide-react";
 import { useProfile } from "@/hooks/useProfile";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
 export default function Profile() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const { profile, isLoading, updateProfile, isUpdating, uploadAvatar, uploading, removeAvatar } = useProfile();
   const [name, setName] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth");
+    }
+  }, [user, authLoading, navigate]);
 
   // Initialize name when profile loads
   useState(() => {
@@ -53,6 +63,14 @@ export default function Profile() {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  if (authLoading) {
+    return null;
+  }
+
+  if (!user) {
+    return null;
+  }
 
   if (isLoading) {
     return (
