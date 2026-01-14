@@ -99,11 +99,12 @@ export default function MyTasks() {
   const [localItems, setLocalItems] = useState<UserActionItem[]>([]);
   const queryClient = useQueryClient();
 
-  // DnD Sensors - use standard PointerSensor with distance constraint
+  // DnD Sensors - use delay constraint to prevent interfering with quick clicks
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 10,
+        delay: 150,
+        tolerance: 5,
       },
     }),
     useSensor(KeyboardSensor, {
