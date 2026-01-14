@@ -122,162 +122,162 @@ export function TaskEditDialog({ item, open, onOpenChange, allTags = [] }: TaskE
     setDueDate(undefined);
   };
 
-  if (!item) return null;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Edit Task</DialogTitle>
-          <DialogDescription>
-            Make changes to your task. Click save when you're done.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="content">Task Description</Label>
-            <Input
-              id="content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Enter task description..."
-              autoFocus
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Due Date</Label>
-            <div className="flex items-center gap-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "flex-1 justify-start text-left font-normal",
-                      !dueDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "PPP") : "No due date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={dueDate}
-                    onSelect={setDueDate}
-                    initialFocus
-                    className="p-3 pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-              {dueDate && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleClearDate}
-                  className="h-9 w-9"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Priority</Label>
-            <Select value={priority} onValueChange={(value) => setPriority(value as TaskPriority)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select priority" />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.entries(PRIORITY_CONFIG) as [TaskPriority, typeof PRIORITY_CONFIG[TaskPriority]][]).map(([value, config]) => (
-                  <SelectItem key={value} value={value}>
-                    <div className="flex items-center gap-2">
-                      <Flag className={cn("h-4 w-4", config.color)} />
-                      {config.label}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-          </Select>
-          </div>
-          <div className="space-y-4">
+      {item && (
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+            <DialogDescription>
+              Make changes to your task. Click save when you're done.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Repeat className="h-4 w-4 text-muted-foreground" />
-                Repeat
-              </Label>
-              <div className="flex flex-wrap gap-2">
-                {RECURRENCE_OPTIONS.map((option) => (
-                  <Button
-                    key={option.value || "none"}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      "capitalize",
-                      recurrenceType === option.value && "border-primary bg-primary/5 text-primary"
-                    )}
-                    onClick={() => setRecurrenceType(option.value)}
-                  >
-                    {option.label}
-                  </Button>
-                ))}
-              </div>
+              <Label htmlFor="content">Task Description</Label>
+              <Input
+                id="content"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Enter task description..."
+                autoFocus
+              />
             </div>
-
-            {recurrenceType !== "none" && recurrenceType !== null && (
-              <div className="space-y-2">
-                <Label>Repeat until (optional)</Label>
+            <div className="space-y-2">
+              <Label>Due Date</Label>
+              <div className="flex items-center gap-2">
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !recurrenceEndDate && "text-muted-foreground"
+                        "flex-1 justify-start text-left font-normal",
+                        !dueDate && "text-muted-foreground"
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {recurrenceEndDate ? format(recurrenceEndDate, "PPP") : "No end date"}
+                      {dueDate ? format(dueDate, "PPP") : "No due date"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
-                      selected={recurrenceEndDate}
-                      onSelect={setRecurrenceEndDate}
-                      disabled={(d) => d < new Date()}
+                      selected={dueDate}
+                      onSelect={setDueDate}
                       initialFocus
-                      className="pointer-events-auto"
+                      className="p-3 pointer-events-auto"
                     />
                   </PopoverContent>
                 </Popover>
+                {dueDate && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleClearDate}
+                    className="h-9 w-9"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
-            )}
+            </div>
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select value={priority} onValueChange={(value) => setPriority(value as TaskPriority)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.entries(PRIORITY_CONFIG) as [TaskPriority, typeof PRIORITY_CONFIG[TaskPriority]][]).map(([value, config]) => (
+                    <SelectItem key={value} value={value}>
+                      <div className="flex items-center gap-2">
+                        <Flag className={cn("h-4 w-4", config.color)} />
+                        {config.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+            </Select>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Repeat className="h-4 w-4 text-muted-foreground" />
+                  Repeat
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {RECURRENCE_OPTIONS.map((option) => (
+                    <Button
+                      key={option.value || "none"}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        "capitalize",
+                        recurrenceType === option.value && "border-primary bg-primary/5 text-primary"
+                      )}
+                      onClick={() => setRecurrenceType(option.value)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {recurrenceType !== "none" && recurrenceType !== null && (
+                <div className="space-y-2">
+                  <Label>Repeat until (optional)</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !recurrenceEndDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {recurrenceEndDate ? format(recurrenceEndDate, "PPP") : "No end date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={recurrenceEndDate}
+                        onSelect={setRecurrenceEndDate}
+                        disabled={(d) => d < new Date()}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <TagInput
+                tags={tags}
+                onChange={setTags}
+                suggestions={allTags}
+                placeholder="Add a tag..."
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <span className="font-medium">Event:</span> {item.event_title}
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Tags</Label>
-            <TagInput
-              tags={tags}
-              onChange={setTags}
-              suggestions={allTags}
-              placeholder="Add a tag..."
-            />
-          </div>
-          <div className="text-sm text-muted-foreground">
-            <span className="font-medium">Event:</span> {item.event_title}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={isSaving} className="gap-1.5">
-            <Save className="h-4 w-4" />
-            {isSaving ? "Saving..." : "Save Changes"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={isSaving} className="gap-1.5">
+              <Save className="h-4 w-4" />
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      )}
     </Dialog>
   );
 }
