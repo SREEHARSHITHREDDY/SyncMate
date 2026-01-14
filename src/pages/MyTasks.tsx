@@ -121,6 +121,16 @@ export default function MyTasks() {
     setPriorityFilter("all");
   }, [activeTab]);
 
+  // Cleanup dialogs when navigating away - critical for preventing stale UI state
+  useEffect(() => {
+    return () => {
+      // Reset all dialog/edit states when unmounting
+      setEditingItem(null);
+      setShowBulkDeleteDialog(false);
+      setSelectedItems(new Set());
+    };
+  }, []);
+
   // Keyboard shortcuts - only listen when component is actually mounted and visible
   useEffect(() => {
     // Don't attach listeners if user is not authenticated
@@ -132,6 +142,11 @@ export default function MyTasks() {
       // Don't intercept any events on interactive elements (except Escape)
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
         return; // Allow all keys to work normally in inputs
+      }
+
+      // Don't intercept events on links or buttons to allow navigation
+      if (target.tagName === "A" || target.tagName === "BUTTON" || target.closest("a") || target.closest("button")) {
+        return;
       }
 
       // Only handle specific keyboard shortcuts for task management

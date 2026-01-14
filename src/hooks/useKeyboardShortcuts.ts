@@ -29,9 +29,12 @@ export function useKeyboardShortcuts({ shortcuts, enabled = true }: UseKeyboardS
         return; // Don't capture any events in input fields
       }
 
-      // Don't intercept link clicks or button events
+      // Don't intercept link clicks or button events - allow navigation to work
       if (target.tagName === "A" || target.tagName === "BUTTON" || target.closest("a") || target.closest("button")) {
-        return;
+        // Only allow Escape key to still close dialogs
+        if (event.key !== "Escape") {
+          return;
+        }
       }
 
       for (const shortcut of shortcuts) {
