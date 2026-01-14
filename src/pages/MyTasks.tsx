@@ -62,46 +62,29 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-// Custom pointer sensor that requires the drag handle to be used
-// This prevents the sensor from capturing all pointer events
+// Custom pointer sensor that ONLY activates on drag handles
+// This prevents the sensor from blocking navigation and other clicks
 class SafePointerSensor extends PointerSensor {
   static activators = [
     {
       eventName: "onPointerDown" as const,
       handler: ({ nativeEvent: event }: React.PointerEvent) => {
-        if (
-          !event.isPrimary ||
-          event.button !== 0 ||
-          isInteractiveElement(event.target as Element)
-        ) {
+        const target = event.target as Element;
+        
+        // Only activate if clicking on or within a drag handle
+        const isDragHandle = target.closest("[data-drag-handle]");
+        if (!isDragHandle) {
           return false;
         }
+        
+        if (!event.isPrimary || event.button !== 0) {
+          return false;
+        }
+        
         return true;
       },
     },
   ];
-}
-
-function isInteractiveElement(element: Element | null): boolean {
-  const interactiveElements = [
-    "button",
-    "input",
-    "textarea",
-    "select",
-    "option",
-    "a",
-  ];
-  if (!element) return false;
-
-  if (interactiveElements.includes(element.tagName.toLowerCase())) {
-    return true;
-  }
-
-  if (element.closest("a, button, input, textarea, select")) {
-    return true;
-  }
-
-  return false;
 }
 
 type FilterType = "all" | "overdue" | "today" | "upcoming" | "no-date";
@@ -1090,6 +1073,7 @@ function SortableTaskItem({
     >
       {isDraggable && (
         <button
+          data-drag-handle
           {...attributes}
           {...listeners}
           className="cursor-grab active:cursor-grabbing touch-none p-1 -ml-1 text-muted-foreground hover:text-foreground"
