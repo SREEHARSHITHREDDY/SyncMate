@@ -179,6 +179,7 @@ export function GuidedDemoTour({ open, onClose, onComplete }: GuidedDemoTourProp
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, goToNext, goToPrev, onClose]);
 
+  // Don't render anything when closed, but all hooks are still called above
   if (!open) return null;
 
   const Icon = step.icon;
