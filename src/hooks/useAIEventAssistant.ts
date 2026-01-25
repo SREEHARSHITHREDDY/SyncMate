@@ -101,22 +101,33 @@ export function useAIEventAssistant() {
         lowerMessage.includes("free slot") ||
         lowerMessage.includes("available time");
 
+      // More precise time pattern detection to avoid false positives
+      // Match patterns like "at 3pm", "at 10:30", "at 2 pm", "at noon"
+      const hasTimePattern = /\bat\s+\d{1,2}(:\d{2})?\s*(am|pm|AM|PM)?/i.test(message) ||
+        /\bat\s+(noon|midnight|morning|afternoon|evening)/i.test(message);
+      
       const isScheduleIntent = 
         !isScheduleViewIntent && // Don't treat view intent as create intent
         !isSuggestTimeIntent && // Don't treat suggestion requests as create
+        !isSearchIntent && // Don't treat search intent as create
         (
-          lowerMessage.includes("schedule") ||
-          lowerMessage.includes("create") ||
-          lowerMessage.includes("plan") ||
-          lowerMessage.includes("set up") ||
-          lowerMessage.includes("book") ||
+          lowerMessage.includes("schedule a") ||
+          lowerMessage.includes("schedule an") ||
+          lowerMessage.includes("create a") ||
+          lowerMessage.includes("create an") ||
+          lowerMessage.includes("plan a") ||
+          lowerMessage.includes("plan an") ||
+          lowerMessage.includes("set up a") ||
+          lowerMessage.includes("set up an") ||
+          lowerMessage.includes("book a") ||
+          lowerMessage.includes("book an") ||
           lowerMessage.includes("add event") ||
+          lowerMessage.includes("add an event") ||
           lowerMessage.includes("meeting at") ||
-          (lowerMessage.includes("at ") && (
-            lowerMessage.includes("am") || 
-            lowerMessage.includes("pm") ||
-            /\d{1,2}:\d{2}/.test(lowerMessage)
-          ))
+          lowerMessage.includes("lunch at") ||
+          lowerMessage.includes("dinner at") ||
+          lowerMessage.includes("coffee at") ||
+          hasTimePattern
         );
 
       let action = "chat";
