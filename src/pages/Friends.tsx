@@ -2,11 +2,12 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, UserPlus, Users, Check, X, Loader2 } from "lucide-react";
+import { Search, UserPlus, Users, Check, X, Loader2, Calendar } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFriends, Profile } from "@/hooks/useFriends";
+import { useCalendarPermissions } from "@/hooks/useCalendarPermissions";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Friends() {
@@ -30,6 +31,12 @@ export default function Friends() {
     rejectingRequest,
     searchUsers,
   } = useFriends();
+
+  const {
+    getRequestStatus,
+    requestAccess,
+    requestingAccess,
+  } = useCalendarPermissions();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -109,6 +116,22 @@ export default function Friends() {
       toast({
         variant: "destructive",
         title: "Failed to decline request",
+        description: error.message || "Something went wrong",
+      });
+    }
+  };
+
+  const handleRequestCalendarAccess = async (ownerId: string) => {
+    try {
+      await requestAccess(ownerId);
+      toast({
+        title: "Request sent!",
+        description: "Your calendar access request has been sent.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to send request",
         description: error.message || "Something went wrong",
       });
     }
@@ -266,24 +289,61 @@ export default function Friends() {
                 </div>
               ) : friends.length > 0 ? (
                 <div className="space-y-3">
-                  {friends.map((friend) => (
-                    <div
-                      key={friend.id}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary/50 transition-colors"
-                    >
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-sm font-medium text-primary">
-                          {friend.profile?.name?.charAt(0).toUpperCase() || "?"}
-                        </span>
+                  {friends.map((friend) => {
+                    const friendUserId = friend.profile?.user_id;
+                    const calendarStatus = friendUserId ? getRequestStatus(friendUserId) : "none";
+                    
+                    return (
+                      <div
+                        key={friend.id}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-secondary/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm font-medium text-primary">
+                              {friend.profile?.name?.charAt(0).toUpperCase() || "?"}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-medium">{friend.profile?.name || "Unknown"}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {friend.profile?.email || ""}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Calendar Access Button */}
+                        {friendUserId && calendarStatus === "none" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRequestCalendarAccess(friendUserId)}
+                            disabled={requestingAccess}
+                          >
+                            {requestingAccess ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Calendar className="h-4 w-4 mr-2" />
+                                Request Access
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        {calendarStatus === "pending" && (
+                          <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
+                            Request Pending
+                          </span>
+                        )}
+                        {calendarStatus === "accepted" && (
+                          <span className="text-xs text-success px-2 py-1 bg-success/10 rounded flex items-center gap-1">
+                            <Check className="h-3 w-3" />
+                            Access Granted
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <p className="font-medium">{friend.profile?.name || "Unknown"}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {friend.profile?.email || ""}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
