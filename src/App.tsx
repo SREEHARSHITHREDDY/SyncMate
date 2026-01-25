@@ -17,7 +17,6 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Templates from "./pages/Templates";
 import MyTasks from "./pages/MyTasks";
-import FriendCalendar from "./pages/FriendCalendar";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,7 +42,6 @@ const App = () => (
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/templates" element={<Templates />} />
                 <Route path="/my-tasks" element={<MyTasks />} />
-                <Route path="/friend-calendar/:friendId" element={<FriendCalendar />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </RealtimeProvider>

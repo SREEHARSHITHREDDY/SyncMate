@@ -8,6 +8,3 @@ verify_jwt = false
 
 [functions.ai-event-assistant]
 verify_jwt = false
-
-[functions.get-signed-url]
-verify_jwt = false

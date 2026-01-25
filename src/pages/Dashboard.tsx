@@ -37,7 +37,15 @@ export default function Dashboard() {
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high">("all");
   const [showCompleted, setShowCompleted] = useState(false);
 
-  // Filter events by priority and completion status - MUST be before conditional returns
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+    }
+  }, [user, loading, navigate]);
+
+  const userName = user?.user_metadata?.name || "there";
+
+  // Filter events by priority and completion status
   const filteredEvents = useMemo(() => {
     let filtered = events;
     
@@ -54,26 +62,10 @@ export default function Dashboard() {
     return filtered;
   }, [events, priorityFilter, showCompleted]);
 
-  // Count completed events - MUST be before conditional returns
+  // Count completed events
   const completedCount = useMemo(() => {
     return events.filter((e) => (e as any).is_completed).length;
   }, [events]);
-
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate("/auth");
-    }
-  }, [user, loading, navigate]);
-
-  if (loading) {
-    return null;
-  }
-
-  if (!user) {
-    return null;
-  }
-
-  const userName = user?.user_metadata?.name || "there";
 
   // Get upcoming events for this week
   const upcomingEvents = filteredEvents.slice(0, 5);

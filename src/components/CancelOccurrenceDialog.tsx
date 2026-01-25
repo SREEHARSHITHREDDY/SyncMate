@@ -28,61 +28,49 @@ export function CancelOccurrenceDialog({
   const { exceptions, addException, removeException, isAdding, isRemoving } = useEventExceptions(event?.id);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
 
-  // Generate occurrences and other data only when event exists
-  const { occurrences, exceptionDates, recurrenceType } = (() => {
-    if (!event) {
-      return { occurrences: [], exceptionDates: new Set<string>(), recurrenceType: null };
-    }
-    
-    const eventData = event as any;
-    const recType = eventData.recurrence_type;
-    const recurrenceEndDate = eventData.recurrence_end_date ? parseISO(eventData.recurrence_end_date) : null;
-    const startDate = parseISO(event.event_date);
-    const today = new Date();
+  if (!event) return null;
 
-    // Generate upcoming occurrences
-    const generateOccurrences = (): Date[] => {
-      if (!recType) return [startDate];
+  const eventData = event as any;
+  const recurrenceType = eventData.recurrence_type;
+  const recurrenceEndDate = eventData.recurrence_end_date ? parseISO(eventData.recurrence_end_date) : null;
+  const startDate = parseISO(event.event_date);
+  const today = new Date();
 
-      const occ: Date[] = [];
-      let current = startDate;
-      const maxOccurrences = 52;
-      const endDate = recurrenceEndDate || addMonths(today, 12);
+  // Generate upcoming occurrences
+  const generateOccurrences = (): Date[] => {
+    if (!recurrenceType) return [startDate];
 
-      for (let i = 0; i < maxOccurrences; i++) {
-        if (isAfter(current, endDate)) break;
-        if (!isBefore(current, today)) {
-          occ.push(current);
-        }
+    const occurrences: Date[] = [];
+    let current = startDate;
+    const maxOccurrences = 52; // Show up to 1 year of occurrences
+    const endDate = recurrenceEndDate || addMonths(today, 12);
 
-        switch (recType) {
-          case "daily":
-            current = addDays(current, 1);
-            break;
-          case "weekly":
-            current = addWeeks(current, 1);
-            break;
-          case "monthly":
-            current = addMonths(current, 1);
-            break;
-          default:
-            break;
-        }
+    for (let i = 0; i < maxOccurrences; i++) {
+      if (isAfter(current, endDate)) break;
+      if (!isBefore(current, today)) {
+        occurrences.push(current);
       }
 
-      return occ;
-    };
+      switch (recurrenceType) {
+        case "daily":
+          current = addDays(current, 1);
+          break;
+        case "weekly":
+          current = addWeeks(current, 1);
+          break;
+        case "monthly":
+          current = addMonths(current, 1);
+          break;
+        default:
+          break;
+      }
+    }
 
-    return {
-      occurrences: generateOccurrences(),
-      exceptionDates: new Set(exceptions.map((e) => e.exception_date)),
-      recurrenceType: recType,
-    };
-  })();
-
-  const isOccurrenceDate = (date: Date): boolean => {
-    return occurrences.some((o) => format(o, "yyyy-MM-dd") === format(date, "yyyy-MM-dd"));
+    return occurrences;
   };
+
+  const occurrences = generateOccurrences();
+  const exceptionDates = new Set(exceptions.map((e) => e.exception_date));
 
   const handleCancelOccurrence = async () => {
     if (!selectedDate || !event) return;
@@ -97,87 +85,90 @@ export function CancelOccurrenceDialog({
     await removeException(exceptionId);
   };
 
+  // Disabled dates: not part of the recurrence pattern
+  const isOccurrenceDate = (date: Date): boolean => {
+    return occurrences.some((o) => format(o, "yyyy-MM-dd") === format(date, "yyyy-MM-dd"));
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {event && (
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarX className="h-5 w-5" />
-              Cancel Occurrence
-            </DialogTitle>
-            <DialogDescription>
-              Cancel a specific occurrence of "{event.title}" without deleting the entire series.
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarX className="h-5 w-5" />
+            Cancel Occurrence
+          </DialogTitle>
+          <DialogDescription>
+            Cancel a specific occurrence of "{event.title}" without deleting the entire series.
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-medium mb-2">Select a date to cancel:</p>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                disabled={(date) => {
-                  const dateStr = format(date, "yyyy-MM-dd");
-                  return !isOccurrenceDate(date) || exceptionDates.has(dateStr);
-                }}
-                modifiers={{
-                  cancelled: Array.from(exceptionDates).map((d) => parseISO(d)),
-                }}
-                modifiersStyles={{
-                  cancelled: {
-                    textDecoration: "line-through",
-                    opacity: 0.5,
-                  },
-                }}
-                className="rounded-lg border"
-              />
-            </div>
-
-            {selectedDate && (
-              <Button
-                onClick={handleCancelOccurrence}
-                disabled={isAdding}
-                className="w-full"
-                variant="destructive"
-              >
-                {isAdding && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Cancel {format(selectedDate, "MMMM d, yyyy")}
-              </Button>
-            )}
-
-            {exceptions.length > 0 && (
-              <div>
-                <p className="text-sm font-medium mb-2">Cancelled occurrences:</p>
-                <ScrollArea className="h-32 rounded-lg border">
-                  <div className="p-2 space-y-2">
-                    {exceptions.map((exception) => (
-                      <div
-                        key={exception.id}
-                        className="flex items-center justify-between p-2 rounded-lg bg-secondary/50"
-                      >
-                        <span className="text-sm line-through text-muted-foreground">
-                          {format(parseISO(exception.exception_date), "MMMM d, yyyy")}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRestoreOccurrence(exception.id)}
-                          disabled={isRemoving}
-                        >
-                          <Undo2 className="h-4 w-4 mr-1" />
-                          Restore
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-medium mb-2">Select a date to cancel:</p>
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              disabled={(date) => {
+                const dateStr = format(date, "yyyy-MM-dd");
+                return !isOccurrenceDate(date) || exceptionDates.has(dateStr);
+              }}
+              modifiers={{
+                cancelled: Array.from(exceptionDates).map((d) => parseISO(d)),
+              }}
+              modifiersStyles={{
+                cancelled: {
+                  textDecoration: "line-through",
+                  opacity: 0.5,
+                },
+              }}
+              className="rounded-lg border"
+            />
           </div>
-        </DialogContent>
-      )}
+
+          {selectedDate && (
+            <Button
+              onClick={handleCancelOccurrence}
+              disabled={isAdding}
+              className="w-full"
+              variant="destructive"
+            >
+              {isAdding && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Cancel {format(selectedDate, "MMMM d, yyyy")}
+            </Button>
+          )}
+
+          {exceptions.length > 0 && (
+            <div>
+              <p className="text-sm font-medium mb-2">Cancelled occurrences:</p>
+              <ScrollArea className="h-32 rounded-lg border">
+                <div className="p-2 space-y-2">
+                  {exceptions.map((exception) => (
+                    <div
+                      key={exception.id}
+                      className="flex items-center justify-between p-2 rounded-lg bg-secondary/50"
+                    >
+                      <span className="text-sm line-through text-muted-foreground">
+                        {format(parseISO(exception.exception_date), "MMMM d, yyyy")}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleRestoreOccurrence(exception.id)}
+                        disabled={isRemoving}
+                      >
+                        <Undo2 className="h-4 w-4 mr-1" />
+                        Restore
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+        </div>
+      </DialogContent>
     </Dialog>
   );
 }

@@ -113,25 +113,7 @@ export function MeetingMinutesDialog({
     setIsEditing(false);
   };
 
-  // Get signed URL for private bucket access using edge function
-  const getSecureAttachmentUrl = async (filePath: string): Promise<string> => {
-    const { data, error } = await supabase.functions.invoke('get-signed-url', {
-      body: { 
-        filePath, 
-        bucket: 'meeting-attachments',
-        expiresIn: 3600 // 1 hour
-      },
-    });
-
-    if (error) {
-      console.error('Error getting signed URL:', error);
-      throw new Error('Failed to get file access');
-    }
-
-    return data.signedUrl;
-  };
-
-  // Fetch all attachments for all minutes with signed URLs
+  // Fetch all attachments for all minutes
   const getAllAttachmentsForMinutes = async () => {
     const allAttachments: { minuteId: string; attachments: any[] }[] = [];
     
@@ -150,34 +132,33 @@ export function MeetingMinutesDialog({
     return allAttachments;
   };
 
+  const getAttachmentUrl = (filePath: string) => {
+    const { data } = supabase.storage
+      .from("meeting-attachments")
+      .getPublicUrl(filePath);
+    return data.publicUrl;
+  };
+
   const getAllMinutesContent = async () => {
     const allAttachments = await getAllAttachmentsForMinutes();
     
-    const contentParts: string[] = [];
-    
-    for (const m of minutes) {
-      const dateStr = format(parseISO(m.created_at), "MMM d, yyyy 'at' h:mm a");
-      let content = `[${dateStr}]\n${m.content}`;
-      
-      // Add attachments info with signed URLs
-      const minuteAttachments = allAttachments.find(a => a.minuteId === m.id);
-      if (minuteAttachments && minuteAttachments.attachments.length > 0) {
-        content += `\n\nAttachments:\n`;
-        for (const att of minuteAttachments.attachments) {
-          try {
-            const signedUrl = await getSecureAttachmentUrl(att.file_path);
-            content += `- ${att.file_name}: ${signedUrl}\n`;
-          } catch (error) {
-            console.error(`Failed to get signed URL for ${att.file_name}:`, error);
-            content += `- ${att.file_name}: [Access unavailable]\n`;
-          }
+    return minutes
+      .map((m) => {
+        const dateStr = format(parseISO(m.created_at), "MMM d, yyyy 'at' h:mm a");
+        let content = `[${dateStr}]\n${m.content}`;
+        
+        // Add attachments info
+        const minuteAttachments = allAttachments.find(a => a.minuteId === m.id);
+        if (minuteAttachments && minuteAttachments.attachments.length > 0) {
+          content += `\n\nAttachments:\n`;
+          minuteAttachments.attachments.forEach((att: any) => {
+            content += `- ${att.file_name}: ${getAttachmentUrl(att.file_path)}\n`;
+          });
         }
-      }
-      
-      contentParts.push(content);
-    }
-    
-    return contentParts.join("\n\n---\n\n");
+        
+        return content;
+      })
+      .join("\n\n---\n\n");
   };
 
   const handleExportPDF = async () => {
@@ -252,7 +233,7 @@ export function MeetingMinutesDialog({
           yPosition += 5;
         }
 
-        // Add attachments section with signed URLs
+        // Add attachments section
         const minuteAttachments = allAttachments.find(a => a.minuteId === minute.id);
         if (minuteAttachments && minuteAttachments.attachments.length > 0) {
           yPosition += 5;
@@ -274,13 +255,8 @@ export function MeetingMinutesDialog({
               doc.addPage();
               yPosition = 20;
             }
-            try {
-              const signedUrl = await getSecureAttachmentUrl(att.file_path);
-              doc.textWithLink(`• ${att.file_name}`, margin + 5, yPosition, { url: signedUrl });
-            } catch (error) {
-              console.error(`Failed to get signed URL for ${att.file_name}:`, error);
-              doc.text(`• ${att.file_name} [Access unavailable]`, margin + 5, yPosition);
-            }
+            const url = getAttachmentUrl(att.file_path);
+            doc.textWithLink(`• ${att.file_name}`, margin + 5, yPosition, { url });
             yPosition += 5;
           }
           
@@ -326,24 +302,14 @@ export function MeetingMinutesDialog({
       const minutesContent = await getAllMinutesContent();
       const formattedDate = eventDate || format(new Date(), "MMMM d, yyyy");
 
-      // Get attachments for email with signed URLs
+      // Get attachments for email
       const allAttachments = await getAllAttachmentsForMinutes();
-      const attachmentLinks: { name: string; url: string }[] = [];
-      
-      for (const a of allAttachments) {
-        for (const att of a.attachments) {
-          try {
-            const signedUrl = await getSecureAttachmentUrl(att.file_path);
-            attachmentLinks.push({
-              name: att.file_name,
-              url: signedUrl,
-            });
-          } catch (error) {
-            console.error(`Failed to get signed URL for ${att.file_name}:`, error);
-            // Skip attachments we can't get signed URLs for
-          }
-        }
-      }
+      const attachmentLinks = allAttachments.flatMap(a => 
+        a.attachments.map((att: any) => ({
+          name: att.file_name,
+          url: getAttachmentUrl(att.file_path),
+        }))
+      );
 
       const response = await supabase.functions.invoke("share-meeting-minutes", {
         body: {

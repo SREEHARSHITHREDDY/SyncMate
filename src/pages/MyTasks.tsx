@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isPast, isToday, isTomorrow, parseISO, differenceInDays } from "date-fns";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -44,12 +44,27 @@ import {
 } from "@/components/ui/tooltip";
 import { TaskEditDialog } from "@/components/TaskEditDialog";
 import { TagBadge, getTagColor } from "@/components/TagInput";
-// Drag-and-drop temporarily disabled to fix navigation issues
-
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type FilterType = "all" | "overdue" | "today" | "upcoming" | "no-date";
 type PriorityFilterType = "all" | TaskPriority;
-type SortType = "due-date" | "created" | "event" | "priority";
+type SortType = "custom" | "due-date" | "created" | "event" | "priority";
 type SortDirection = "asc" | "desc";
 type TabType = "active" | "completed";
 
@@ -66,14 +81,12 @@ const RECURRENCE_LABELS: Record<string, string> = {
 };
 
 export default function MyTasks() {
-  const { user, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
   const { actionItems, completedItems, allTags, isLoading, overdueCount, totalCount, completedCount } = useUserActionItems(true);
   const [activeTab, setActiveTab] = useState<TabType>("active");
   const [filter, setFilter] = useState<FilterType>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilterType>("all");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortType>("due-date");
+  const [sortBy, setSortBy] = useState<SortType>("custom");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -82,28 +95,7 @@ export default function MyTasks() {
   const [editingItem, setEditingItem] = useState<UserActionItem | null>(null);
   const [localItems, setLocalItems] = useState<UserActionItem[]>([]);
   const queryClient = useQueryClient();
-  // Drag-and-drop disabled - just use localItems for display
-
-  // ALL useCallback hooks MUST be before conditional returns
-  const toggleSelectAll = useCallback(() => {
-    setSelectedItems(prev => {
-      if (prev.size > 0) {
-        return new Set();
-      }
-      return new Set(localItems.map(item => item.id));
-    });
-  }, [localItems]);
-
-  const clearSelection = useCallback(() => {
-    setSelectedItems(new Set());
-  }, []);
-
-  // ALL useEffect hooks MUST be before conditional returns
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/auth");
-    }
-  }, [user, authLoading, navigate]);
+  const { user } = useAuth();
 
   // Keep local items in sync with server items
   useEffect(() => {
@@ -114,72 +106,17 @@ export default function MyTasks() {
     }
   }, [actionItems, completedItems, activeTab]);
 
-  // Clear selection when switching tabs
-  useEffect(() => {
-    setSelectedItems(new Set());
-    setTagFilter(null);
-    setPriorityFilter("all");
-  }, [activeTab]);
-
-  // Cleanup dialogs when navigating away - critical for preventing stale UI state
-  useEffect(() => {
-    return () => {
-      // Reset all dialog/edit states when unmounting
-      setEditingItem(null);
-      setShowBulkDeleteDialog(false);
-      setSelectedItems(new Set());
-    };
-  }, []);
-
-  // Keyboard shortcuts - only listen when component is actually mounted and visible
-  useEffect(() => {
-    // Don't attach listeners if user is not authenticated
-    if (!user) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      
-      // Don't intercept any events on interactive elements (except Escape)
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-        return; // Allow all keys to work normally in inputs
-      }
-
-      // Don't intercept events on links or buttons to allow navigation
-      if (target.tagName === "A" || target.tagName === "BUTTON" || target.closest("a") || target.closest("button")) {
-        return;
-      }
-
-      // Only handle specific keyboard shortcuts for task management
-      if ((e.metaKey || e.ctrlKey) && e.key === "a" && !e.shiftKey) {
-        e.preventDefault();
-        toggleSelectAll();
-        return;
-      }
-
-      // Only clear selection on Escape, don't prevent default
-      if (e.key === "Escape" && selectedItems.size > 0) {
-        clearSelection();
-        return;
-      }
-
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedItems.size > 0) {
-        e.preventDefault();
-        setShowBulkDeleteDialog(true);
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [user, toggleSelectAll, clearSelection, selectedItems]);
-
-  if (authLoading) {
-    return null;
-  }
-
-  if (!user) {
-    return null;
-  }
+  // DnD Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Calculate counts for each filter
   const dueTodayCount = actionItems.filter(item => {
@@ -266,32 +203,68 @@ export default function MyTasks() {
   });
 
   // Sort items
-  const sortedItems = [...filteredItems].sort((a, b) => {
-    let comparison = 0;
-    const priorityOrder: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
-    
-    switch (sortBy) {
-      case "due-date":
-        if (!a.due_date && !b.due_date) comparison = 0;
-        else if (!a.due_date) comparison = 1;
-        else if (!b.due_date) comparison = -1;
-        else comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-        break;
-      case "created":
-        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        break;
-      case "event":
-        comparison = (a.event_title || "").localeCompare(b.event_title || "");
-        break;
-      case "priority":
-        comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
-        break;
-    }
-    
-    return sortDirection === "desc" ? -comparison : comparison;
-  });
+  const sortedItems = sortBy === "custom" 
+    ? filteredItems 
+    : [...filteredItems].sort((a, b) => {
+        let comparison = 0;
+        const priorityOrder: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
+        
+        switch (sortBy) {
+          case "due-date":
+            if (!a.due_date && !b.due_date) comparison = 0;
+            else if (!a.due_date) comparison = 1;
+            else if (!b.due_date) comparison = -1;
+            else comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+            break;
+          case "created":
+            comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            break;
+          case "event":
+            comparison = (a.event_title || "").localeCompare(b.event_title || "");
+            break;
+          case "priority":
+            comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
+            break;
+        }
+        
+        return sortDirection === "desc" ? -comparison : comparison;
+      });
 
-  // Drag-and-drop handler removed to fix navigation issues
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) return;
+    
+    const oldIndex = localItems.findIndex(item => item.id === active.id);
+    const newIndex = localItems.findIndex(item => item.id === over.id);
+    
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Optimistically update local state
+    const newItems = arrayMove(localItems, oldIndex, newIndex);
+    setLocalItems(newItems);
+
+    // Update sort_order in database
+    try {
+      const updates = newItems.map((item, index) => ({
+        id: item.id,
+        sort_order: index,
+      }));
+
+      for (const update of updates) {
+        await supabase
+          .from("action_items")
+          .update({ sort_order: update.sort_order })
+          .eq("id", update.id);
+      }
+
+      toast.success("Task order updated");
+    } catch (error) {
+      // Revert on error
+      setLocalItems(activeTab === "active" ? actionItems : completedItems);
+      toast.error("Failed to update task order");
+    }
+  };
 
   const handleToggleComplete = async (item: UserActionItem) => {
     setProcessingIds(prev => new Set(prev).add(item.id));
@@ -430,6 +403,67 @@ export default function MyTasks() {
     });
   };
 
+  const toggleSelectAll = useCallback(() => {
+    if (selectedItems.size === sortedItems.length && sortedItems.length > 0) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(sortedItems.map(item => item.id)));
+    }
+  }, [selectedItems.size, sortedItems]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedItems(new Set());
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        if (e.key !== "Escape") return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === "a" && !e.shiftKey) {
+        e.preventDefault();
+        toggleSelectAll();
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        clearSelection();
+        return;
+      }
+
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedItems.size > 0) {
+        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
+          e.preventDefault();
+          setShowBulkDeleteDialog(true);
+        }
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && selectedItems.size > 0) {
+        e.preventDefault();
+        if (activeTab === "active") {
+          handleBulkComplete();
+        } else {
+          handleBulkRestore();
+        }
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleSelectAll, clearSelection, selectedItems, activeTab]);
+
+  // Clear selection when switching tabs
+  useEffect(() => {
+    setSelectedItems(new Set());
+    setTagFilter(null);
+    setPriorityFilter("all");
+  }, [activeTab]);
 
   return (
     <AppLayout>
@@ -556,24 +590,27 @@ export default function MyTasks() {
                           <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="custom">Custom Order</SelectItem>
                           <SelectItem value="due-date">Due Date</SelectItem>
                           <SelectItem value="priority">Priority</SelectItem>
                           <SelectItem value="created">Created</SelectItem>
                           <SelectItem value="event">Event</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
-                        className="h-8 w-8 p-0"
-                      >
-                        {sortDirection === "asc" ? (
-                          <SortAsc className="h-4 w-4" />
-                        ) : (
-                          <SortDesc className="h-4 w-4" />
-                        )}
-                      </Button>
+                      {sortBy !== "custom" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
+                          className="h-8 w-8 p-0"
+                        >
+                          {sortDirection === "asc" ? (
+                            <SortAsc className="h-4 w-4" />
+                          ) : (
+                            <SortDesc className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -687,6 +724,7 @@ export default function MyTasks() {
                     <CardTitle className="text-lg">Tasks</CardTitle>
                     <CardDescription>
                       {sortedItems.length} task{sortedItems.length !== 1 ? "s" : ""} shown
+                      {sortBy === "custom" && " • Drag to reorder"}
                     </CardDescription>
                   </div>
                   {sortedItems.length > 0 && (
@@ -721,20 +759,32 @@ export default function MyTasks() {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {sortedItems.map((item) => (
-                      <TaskItem
-                        key={item.id}
-                        item={item}
-                        isSelected={selectedItems.has(item.id)}
-                        isProcessing={processingIds.has(item.id)}
-                        onToggleSelect={() => toggleSelectItem(item.id)}
-                        onComplete={() => handleToggleComplete(item)}
-                        onEdit={() => setEditingItem(item)}
-                        getDueDateInfo={getDueDateInfo}
-                      />
-                    ))}
-                  </div>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={sortedItems.map(item => item.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-2">
+                        {sortedItems.map((item) => (
+                          <SortableTaskItem
+                            key={item.id}
+                            item={item}
+                            isSelected={selectedItems.has(item.id)}
+                            isProcessing={processingIds.has(item.id)}
+                            isDraggable={sortBy === "custom"}
+                            onToggleSelect={() => toggleSelectItem(item.id)}
+                            onComplete={() => handleToggleComplete(item)}
+                            onEdit={() => setEditingItem(item)}
+                            getDueDateInfo={getDueDateInfo}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
                 )}
               </CardContent>
             </Card>
@@ -928,43 +978,66 @@ export default function MyTasks() {
   );
 }
 
-// Base Task Item Props (shared between sortable and non-sortable)
-interface TaskItemBaseProps {
+// Sortable Task Item Component
+interface SortableTaskItemProps {
   item: UserActionItem;
   isSelected: boolean;
   isProcessing: boolean;
+  isDraggable: boolean;
   onToggleSelect: () => void;
   onComplete: () => void;
   onEdit: () => void;
   getDueDateInfo: (dueDate: string | null) => { label: string; isOverdue: boolean; isUrgent: boolean; isToday: boolean } | null;
 }
 
-// Shared Task Item Content (used by both sortable and non-sortable)
-function TaskItemContent({
+function SortableTaskItem({
   item,
   isSelected,
   isProcessing,
+  isDraggable,
   onToggleSelect,
   onComplete,
   onEdit,
   getDueDateInfo,
-  dragHandleProps,
-  showDragHandle = false,
-  isDragging = false,
-}: TaskItemBaseProps & { 
-  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
-  showDragHandle?: boolean;
-  isDragging?: boolean;
-}) {
+}: SortableTaskItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id, disabled: !isDraggable });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   const dueDateInfo = getDueDateInfo(item.due_date);
+
   const priorityConfig = PRIORITY_CONFIG[item.priority];
 
   return (
-    <>
-      {showDragHandle && (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
+        item.priority === "high" && "border-l-4 border-l-priority-high",
+        item.priority === "medium" && "border-l-4 border-l-priority-medium",
+        item.priority === "low" && "border-l-4 border-l-priority-low",
+        dueDateInfo?.isOverdue && "border-destructive/50 bg-destructive/5",
+        dueDateInfo?.isToday && !dueDateInfo?.isOverdue && "border-primary/50 bg-primary/5",
+        isSelected && "ring-2 ring-primary/50",
+        isDragging && "opacity-50 shadow-lg",
+        "hover:bg-accent/30"
+      )}
+    >
+      {isDraggable && (
         <button
-          data-drag-handle
-          {...dragHandleProps}
+          {...attributes}
+          {...listeners}
           className="cursor-grab active:cursor-grabbing touch-none p-1 -ml-1 text-muted-foreground hover:text-foreground"
         >
           <GripVertical className="h-4 w-4" />
@@ -1067,31 +1140,6 @@ function TaskItemContent({
           <TooltipContent>Mark as complete</TooltipContent>
         </Tooltip>
       </div>
-    </>
-  );
-}
-
-// Non-sortable Task Item (no drag-and-drop hooks)
-function TaskItem(props: TaskItemBaseProps) {
-  const { item, isProcessing } = props;
-  const dueDateInfo = props.getDueDateInfo(item.due_date);
-
-  return (
-    <div
-      className={cn(
-        "flex items-start gap-3 p-4 rounded-lg border bg-card transition-all group",
-        item.priority === "high" && "border-l-4 border-l-priority-high",
-        item.priority === "medium" && "border-l-4 border-l-priority-medium",
-        item.priority === "low" && "border-l-4 border-l-priority-low",
-        dueDateInfo?.isOverdue && "border-destructive/50 bg-destructive/5",
-        dueDateInfo?.isToday && !dueDateInfo?.isOverdue && "border-primary/50 bg-primary/5",
-        props.isSelected && "ring-2 ring-primary/50",
-        "hover:bg-accent/30"
-      )}
-    >
-      <TaskItemContent {...props} />
     </div>
   );
 }
-
-// SortableTaskItem removed - drag-and-drop disabled to fix navigation issues

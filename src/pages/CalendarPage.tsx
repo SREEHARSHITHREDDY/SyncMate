@@ -71,7 +71,7 @@ export default function CalendarPage() {
     enabled: !!user && events.length > 0,
   });
 
-  // Add cancellation status to events and filter by category - MUST be before conditional returns
+  // Add cancellation status to events and filter by category
   const eventsWithStatus = useMemo(() => {
     let filtered = events.map((event) => {
       const isCancelled = allExceptions.some(
@@ -95,14 +95,6 @@ export default function CalendarPage() {
       navigate("/auth");
     }
   }, [user, loading, navigate]);
-
-  if (loading) {
-    return null;
-  }
-
-  if (!user) {
-    return null;
-  }
 
   const goToPrev = () => {
     switch (viewMode) {

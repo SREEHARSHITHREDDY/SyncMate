@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { useCallback } from "react";
 
 export interface MeetingAttachment {
   id: string;
@@ -14,9 +13,6 @@ export interface MeetingAttachment {
   uploaded_by: string;
   created_at: string;
 }
-
-// Cache for signed URLs to avoid repeated requests
-const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
 export function useMeetingAttachments(minuteId: string | null) {
   const { user } = useAuth();
@@ -98,9 +94,6 @@ export function useMeetingAttachments(minuteId: string | null) {
         .eq("id", attachment.id);
 
       if (deleteError) throw deleteError;
-
-      // Clear from cache
-      signedUrlCache.delete(attachment.file_path);
     },
     onSuccess: () => {
       toast.success("Attachment deleted");
@@ -111,34 +104,12 @@ export function useMeetingAttachments(minuteId: string | null) {
     },
   });
 
-  // Get signed URL for private bucket access
-  const getSignedUrl = useCallback(async (filePath: string): Promise<string> => {
-    // Check cache first
-    const cached = signedUrlCache.get(filePath);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.url;
-    }
-
-    // Request new signed URL from edge function
-    const { data, error } = await supabase.functions.invoke('get-signed-url', {
-      body: { 
-        filePath, 
-        bucket: 'meeting-attachments',
-        expiresIn: 3600 // 1 hour
-      },
-    });
-
-    if (error) {
-      console.error('Error getting signed URL:', error);
-      throw new Error('Failed to get file access');
-    }
-
-    // Cache the URL with expiry (subtract 5 minutes for safety margin)
-    const expiresAt = Date.now() + (3600 - 300) * 1000;
-    signedUrlCache.set(filePath, { url: data.signedUrl, expiresAt });
-
-    return data.signedUrl;
-  }, []);
+  const getPublicUrl = (filePath: string) => {
+    const { data } = supabase.storage
+      .from("meeting-attachments")
+      .getPublicUrl(filePath);
+    return data.publicUrl;
+  };
 
   return {
     attachments: attachmentsQuery.data || [],
@@ -147,6 +118,6 @@ export function useMeetingAttachments(minuteId: string | null) {
     isUploading: uploadMutation.isPending,
     deleteAttachment: deleteMutation.mutate,
     isDeleting: deleteMutation.isPending,
-    getSignedUrl,
+    getPublicUrl,
   };
 }

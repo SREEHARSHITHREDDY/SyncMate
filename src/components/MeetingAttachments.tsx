@@ -1,4 +1,4 @@
-import { useRef, useState, DragEvent, useEffect, useCallback } from "react";
+import { useRef, useState, DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useMeetingAttachments, MeetingAttachment } from "@/hooks/useMeetingAttachments";
 import { Loader2, Paperclip, X, FileImage, FileText, File, ExternalLink, Upload } from "lucide-react";
@@ -27,122 +27,6 @@ function getFileIcon(fileType: string) {
   return <File className="h-4 w-4" />;
 }
 
-// Component for individual attachment with async URL handling
-function AttachmentItem({ 
-  attachment, 
-  canEdit, 
-  isDeleting, 
-  onDelete, 
-  onImageClick,
-  getSignedUrl,
-}: {
-  attachment: MeetingAttachment;
-  canEdit: boolean;
-  isDeleting: boolean;
-  onDelete: (attachment: MeetingAttachment) => void;
-  onImageClick: (url: string, name: string) => void;
-  getSignedUrl: (filePath: string) => Promise<string>;
-}) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [isLoadingUrl, setIsLoadingUrl] = useState(true);
-  const isImage = attachment.file_type.startsWith("image/");
-
-  useEffect(() => {
-    let isMounted = true;
-    
-    const fetchUrl = async () => {
-      try {
-        const signedUrl = await getSignedUrl(attachment.file_path);
-        if (isMounted) {
-          setUrl(signedUrl);
-          setIsLoadingUrl(false);
-        }
-      } catch (error) {
-        console.error('Failed to get signed URL:', error);
-        if (isMounted) {
-          setIsLoadingUrl(false);
-        }
-      }
-    };
-
-    fetchUrl();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [attachment.file_path, getSignedUrl]);
-
-  const handleImageClick = () => {
-    if (url && isImage) {
-      onImageClick(url, attachment.file_name);
-    }
-  };
-
-  const handleOpenFile = () => {
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  return (
-    <div className="group relative flex items-center gap-2 rounded-md border bg-muted/50 px-2 py-1.5 text-xs">
-      {isLoadingUrl ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : isImage && url ? (
-        <button
-          type="button"
-          onClick={handleImageClick}
-          className="h-8 w-8 rounded overflow-hidden hover:ring-2 ring-primary transition-all"
-        >
-          <img
-            src={url}
-            alt={attachment.file_name}
-            className="h-full w-full object-cover"
-          />
-        </button>
-      ) : (
-        getFileIcon(attachment.file_type)
-      )}
-      <div className="flex flex-col">
-        {isImage ? (
-          <button
-            type="button"
-            onClick={handleImageClick}
-            className="flex items-center gap-1 font-medium hover:underline text-left"
-            disabled={!url}
-          >
-            <span className="max-w-[120px] truncate">{attachment.file_name}</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleOpenFile}
-            className="flex items-center gap-1 font-medium hover:underline text-left"
-            disabled={!url}
-          >
-            <span className="max-w-[120px] truncate">{attachment.file_name}</span>
-            <ExternalLink className="h-3 w-3 opacity-50" />
-          </button>
-        )}
-        <span className="text-muted-foreground">
-          {formatFileSize(attachment.file_size)}
-        </span>
-      </div>
-      {canEdit && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={() => onDelete(attachment)}
-          disabled={isDeleting}
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      )}
-    </div>
-  );
-}
-
 export function MeetingAttachments({ minuteId, canEdit }: MeetingAttachmentsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -155,7 +39,7 @@ export function MeetingAttachments({ minuteId, canEdit }: MeetingAttachmentsProp
     isUploading,
     deleteAttachment,
     isDeleting,
-    getSignedUrl,
+    getPublicUrl,
   } = useMeetingAttachments(minuteId);
 
   const validateAndUploadFile = (file: File) => {
@@ -231,9 +115,12 @@ export function MeetingAttachments({ minuteId, canEdit }: MeetingAttachmentsProp
     }
   };
 
-  const handleImageClick = useCallback((url: string, name: string) => {
-    setPreviewImage({ url, name });
-  }, []);
+  const handleImageClick = (attachment: MeetingAttachment) => {
+    if (attachment.file_type.startsWith("image/")) {
+      const url = getPublicUrl(attachment.file_path);
+      setPreviewImage({ url, name: attachment.file_name });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -267,17 +154,68 @@ export function MeetingAttachments({ minuteId, canEdit }: MeetingAttachmentsProp
         {/* Attachments list */}
         {attachments.length > 0 && !isDragOver && (
           <div className="flex flex-wrap gap-2">
-            {attachments.map((attachment) => (
-              <AttachmentItem
-                key={attachment.id}
-                attachment={attachment}
-                canEdit={canEdit}
-                isDeleting={isDeleting}
-                onDelete={handleDelete}
-                onImageClick={handleImageClick}
-                getSignedUrl={getSignedUrl}
-              />
-            ))}
+            {attachments.map((attachment) => {
+              const url = getPublicUrl(attachment.file_path);
+              const isImage = attachment.file_type.startsWith("image/");
+              
+              return (
+                <div
+                  key={attachment.id}
+                  className="group relative flex items-center gap-2 rounded-md border bg-muted/50 px-2 py-1.5 text-xs"
+                >
+                  {isImage ? (
+                    <button
+                      type="button"
+                      onClick={() => handleImageClick(attachment)}
+                      className="h-8 w-8 rounded overflow-hidden hover:ring-2 ring-primary transition-all"
+                    >
+                      <img
+                        src={url}
+                        alt={attachment.file_name}
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  ) : (
+                    getFileIcon(attachment.file_type)
+                  )}
+                  <div className="flex flex-col">
+                    {isImage ? (
+                      <button
+                        type="button"
+                        onClick={() => handleImageClick(attachment)}
+                        className="flex items-center gap-1 font-medium hover:underline text-left"
+                      >
+                        <span className="max-w-[120px] truncate">{attachment.file_name}</span>
+                      </button>
+                    ) : (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 font-medium hover:underline"
+                      >
+                        <span className="max-w-[120px] truncate">{attachment.file_name}</span>
+                        <ExternalLink className="h-3 w-3 opacity-50" />
+                      </a>
+                    )}
+                    <span className="text-muted-foreground">
+                      {formatFileSize(attachment.file_size)}
+                    </span>
+                  </div>
+                  {canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDelete(attachment)}
+                      disabled={isDeleting}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 

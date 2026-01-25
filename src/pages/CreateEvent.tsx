@@ -65,14 +65,6 @@ export default function CreateEvent() {
     }
   }, [user, loading, navigate]);
 
-  if (loading) {
-    return null;
-  }
-
-  if (!user) {
-    return null;
-  }
-
   const toggleFriend = (friendUserId: string) => {
     setSelectedFriends((prev) =>
       prev.includes(friendUserId)
