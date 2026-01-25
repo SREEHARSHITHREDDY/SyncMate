@@ -6,6 +6,26 @@ import { EventWithResponse } from "./useEvents";
 export function useFriendCalendar(friendId: string | null) {
   const { user } = useAuth();
 
+  // Fetch the permission details to get view restrictions
+  const permissionQuery = useQuery({
+    queryKey: ["friend-calendar-permission", friendId, user?.id],
+    queryFn: async () => {
+      if (!user || !friendId) return null;
+
+      const { data, error } = await supabase
+        .from("calendar_permissions")
+        .select("*")
+        .eq("owner_id", friendId)
+        .eq("viewer_id", user.id)
+        .eq("status", "accepted")
+        .single();
+
+      if (error) return null;
+      return data;
+    },
+    enabled: !!user && !!friendId,
+  });
+
   // Fetch friend's events when user has access to their calendar
   const friendEventsQuery = useQuery({
     queryKey: ["friend-calendar", friendId, user?.id],
@@ -21,14 +41,22 @@ export function useFriendCalendar(friendId: string | null) {
         throw new Error("You don't have access to this calendar");
       }
 
+      // Determine the start date for fetching events
       const today = new Date().toISOString().split("T")[0];
+      const permission = permissionQuery.data;
+      
+      // Use view_from_date if it's later than today, otherwise use today
+      let startDate = today;
+      if (permission?.view_from_date && permission.view_from_date > today) {
+        startDate = permission.view_from_date;
+      }
 
       // Fetch friend's events - RLS will filter appropriately
       const { data: events, error } = await supabase
         .from("events")
         .select("*")
         .eq("creator_id", friendId)
-        .gte("event_date", today)
+        .gte("event_date", startDate)
         .order("event_date", { ascending: true });
 
       if (error) throw error;
@@ -40,7 +68,7 @@ export function useFriendCalendar(friendId: string | null) {
         response: undefined,
       })) as EventWithResponse[];
     },
-    enabled: !!user && !!friendId,
+    enabled: !!user && !!friendId && permissionQuery.isFetched,
   });
 
   // Fetch friend's event exceptions
@@ -67,9 +95,10 @@ export function useFriendCalendar(friendId: string | null) {
 
   return {
     events: friendEventsQuery.data || [],
-    eventsLoading: friendEventsQuery.isLoading,
+    eventsLoading: friendEventsQuery.isLoading || permissionQuery.isLoading,
     eventsError: friendEventsQuery.error,
     exceptions: friendExceptionsQuery.data || [],
     exceptionsLoading: friendExceptionsQuery.isLoading,
+    permission: permissionQuery.data,
   };
 }
