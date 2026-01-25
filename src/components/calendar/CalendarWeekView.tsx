@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { format, parseISO, isSameDay, startOfWeek, addDays, isToday } from "date-fns";
+import { EyeOff } from "lucide-react";
 import { EventWithResponse } from "@/hooks/useEvents";
 import { getCategoryColor } from "@/lib/eventCategories";
 
@@ -94,6 +95,7 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
                     const { top, height } = getEventPosition(event);
                     const isInactive = event.isCancelled || event.is_completed;
                     const categoryColor = getCategoryColor((event as any).category);
+                    const isPrivate = (event as any).is_private;
                     
                     return (
                       <div
@@ -105,8 +107,9 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
                         className={`absolute left-0.5 right-0.5 rounded px-1 py-0.5 cursor-pointer transition-opacity hover:opacity-80 ${categoryColor} ${isInactive ? "opacity-50" : ""}`}
                         style={{ top: `${top}px`, minHeight: `${Math.max(height, 20)}px` }}
                       >
-                        <div className={`text-white text-[10px] font-medium truncate ${isInactive ? "line-through" : ""}`}>
+                        <div className={`text-white text-[10px] font-medium truncate flex items-center gap-0.5 ${isInactive ? "line-through" : ""}`}>
                           {event.title}
+                          {isPrivate && <EyeOff className="h-2.5 w-2.5 opacity-70 flex-shrink-0" />}
                         </div>
                       </div>
                     );

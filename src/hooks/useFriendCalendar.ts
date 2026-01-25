@@ -52,10 +52,12 @@ export function useFriendCalendar(friendId: string | null) {
       }
 
       // Fetch friend's events - RLS will filter appropriately
+      // Filter out private events since this is a shared calendar view
       const { data: events, error } = await supabase
         .from("events")
         .select("*")
         .eq("creator_id", friendId)
+        .eq("is_private", false)
         .gte("event_date", startDate)
         .order("event_date", { ascending: true });
 
