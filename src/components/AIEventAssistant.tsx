@@ -45,6 +45,7 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const [creatingEvent, setCreatingEvent] = useState(false);
+  const [createdEvents, setCreatedEvents] = useState<Set<string>>(new Set());
   const [isListening, setIsListening] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [handsFreeMode, setHandsFreeMode] = useState(false);
@@ -285,6 +286,16 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     description?: string;
   }) => {
     if (!user) return;
+    
+    // Create unique key for this event
+    const eventKey = `${parsedEvent.title}-${parsedEvent.date}-${parsedEvent.time}`;
+    
+    // Check if already created
+    if (createdEvents.has(eventKey)) {
+      toast.info("This event has already been created!");
+      return;
+    }
+    
     setCreatingEvent(true);
 
     try {
@@ -299,9 +310,10 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
 
       if (error) throw error;
 
+      // Mark this event as created
+      setCreatedEvents(prev => new Set(prev).add(eventKey));
       toast.success(`Event "${parsedEvent.title}" created successfully!`);
       queryClient.invalidateQueries({ queryKey: ["events"] });
-      // No need to send another message - just show the toast
     } catch (error: any) {
       toast.error(error.message || "Failed to create event");
     } finally {
@@ -388,7 +400,10 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={clearMessages}
+              onClick={() => {
+                clearMessages();
+                setCreatedEvents(new Set());
+              }}
               title="Clear conversation"
             >
               <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -494,26 +509,36 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
                 </div>
                 
                 {/* Create Event Button */}
-                {message.parsedEvent && (
-                  <Button
-                    size="sm"
-                    className="mt-3 w-full gap-2"
-                    onClick={() => handleCreateEvent(message.parsedEvent!)}
-                    disabled={creatingEvent}
-                  >
-                    {creatingEvent ? (
-                      <>
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="h-3 w-3" />
-                        Create Event
-                      </>
-                    )}
-                  </Button>
-                )}
+                {message.parsedEvent && (() => {
+                  const eventKey = `${message.parsedEvent.title}-${message.parsedEvent.date}-${message.parsedEvent.time}`;
+                  const isCreated = createdEvents.has(eventKey);
+                  
+                  return isCreated ? (
+                    <div className="mt-3 w-full flex items-center justify-center gap-2 py-2 px-4 rounded-md bg-success/10 text-success text-sm font-medium">
+                      <Check className="h-4 w-4" />
+                      Event Created!
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="mt-3 w-full gap-2"
+                      onClick={() => handleCreateEvent(message.parsedEvent!)}
+                      disabled={creatingEvent}
+                    >
+                      {creatingEvent ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-3 w-3" />
+                          Create Event
+                        </>
+                      )}
+                    </Button>
+                  );
+                })()}
 
                 {/* Search Results Quick View */}
                 {message.searchResults && message.searchResults.length > 0 && (
