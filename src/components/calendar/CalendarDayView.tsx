@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { format, parseISO, isSameDay } from "date-fns";
+import { EyeOff } from "lucide-react";
 import { EventWithResponse } from "@/hooks/useEvents";
 import { getCategoryColor } from "@/lib/eventCategories";
 
@@ -94,6 +95,7 @@ export function CalendarDayView({ selectedDate, events, onEventClick, onTimeSlot
               const { top, height } = getEventPosition(event);
               const isInactive = event.isCancelled || event.is_completed;
               const categoryColor = getCategoryColor((event as any).category);
+              const isPrivate = (event as any).is_private;
               
               return (
                 <div
@@ -105,8 +107,9 @@ export function CalendarDayView({ selectedDate, events, onEventClick, onTimeSlot
                   className={`absolute left-1 right-1 rounded px-2 py-1 border-l-4 cursor-pointer transition-opacity hover:opacity-80 ${categoryColor} ${isInactive ? "opacity-50" : ""}`}
                   style={{ top: `${top}px`, minHeight: `${height}px` }}
                 >
-                  <div className={`text-white text-sm font-medium ${isInactive ? "line-through" : ""}`}>
+                  <div className={`text-white text-sm font-medium flex items-center gap-1 ${isInactive ? "line-through" : ""}`}>
                     {event.event_time.slice(0, 5)}
+                    {isPrivate && <EyeOff className="h-3 w-3 opacity-70" />}
                   </div>
                   <div className={`text-white text-sm font-semibold ${isInactive ? "line-through" : ""}`}>
                     {event.title}

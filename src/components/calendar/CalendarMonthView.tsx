@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { format, parseISO, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMonth, startOfWeek, endOfWeek } from "date-fns";
+import { EyeOff } from "lucide-react";
 import { EventWithResponse } from "@/hooks/useEvents";
 import { getCategoryColor } from "@/lib/eventCategories";
 import {
@@ -78,6 +79,7 @@ export function CalendarMonthView({ selectedDate, events, onDateClick, onEventCl
                     {dayEvents.slice(0, 3).map((event) => {
                       const isInactive = event.isCancelled || event.is_completed;
                       const categoryColor = getCategoryColor((event as any).category);
+                      const isPrivate = (event as any).is_private;
                       
                       return (
                         <Tooltip key={event.id}>
@@ -87,14 +89,16 @@ export function CalendarMonthView({ selectedDate, events, onDateClick, onEventCl
                                 e.stopPropagation();
                                 onEventClick?.(event);
                               }}
-                              className={`text-[11px] px-1.5 py-0.5 rounded text-white truncate cursor-pointer transition-opacity hover:opacity-80 ${categoryColor} ${isInactive ? "opacity-50 line-through" : ""}`}
+                              className={`text-[11px] px-1.5 py-0.5 rounded text-white truncate cursor-pointer transition-opacity hover:opacity-80 flex items-center gap-0.5 ${categoryColor} ${isInactive ? "opacity-50 line-through" : ""}`}
                             >
-                              {event.event_time.slice(0, 5)} {event.title}
+                              <span className="truncate">{event.event_time.slice(0, 5)} {event.title}</span>
+                              {isPrivate && <EyeOff className="h-2.5 w-2.5 opacity-70 flex-shrink-0" />}
                             </div>
                           </TooltipTrigger>
                           <TooltipContent side="right">
                             <p className="font-medium">{event.title}</p>
                             <p className="text-xs text-muted-foreground">{event.event_time.slice(0, 5)}</p>
+                            {isPrivate && <p className="text-xs text-muted-foreground">Private event</p>}
                             {event.isCancelled && <p className="text-xs text-destructive">Cancelled</p>}
                             {event.is_completed && <p className="text-xs text-muted-foreground">Completed</p>}
                           </TooltipContent>

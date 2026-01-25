@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -34,6 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import { RecurrenceSelect, RecurrenceType } from "@/components/RecurrenceSelect";
 import { CATEGORY_COLORS, CategoryType } from "@/lib/eventCategories";
+import { Switch } from "@/components/ui/switch";
 
 interface EditEventDialogProps {
   event: EventWithResponse | null;
@@ -54,6 +55,7 @@ export function EditEventDialog({ event, open, onOpenChange }: EditEventDialogPr
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("none");
   const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>();
   const [category, setCategory] = useState<CategoryType>("default");
+  const [isPrivate, setIsPrivate] = useState(false);
 
   useEffect(() => {
     if (event) {
@@ -62,11 +64,12 @@ export function EditEventDialog({ event, open, onOpenChange }: EditEventDialogPr
       setDate(new Date(event.event_date));
       setTime(event.event_time.slice(0, 5));
       setPriority(event.priority);
-      // Handle recurrence and category from extended event type
+      // Handle recurrence, category, and privacy from extended event type
       const eventData = event as any;
       setRecurrenceType(eventData.recurrence_type || "none");
       setRecurrenceEndDate(eventData.recurrence_end_date ? new Date(eventData.recurrence_end_date) : undefined);
       setCategory(eventData.category || "default");
+      setIsPrivate(eventData.is_private || false);
     }
   }, [event]);
 
@@ -90,6 +93,7 @@ export function EditEventDialog({ event, open, onOpenChange }: EditEventDialogPr
           recurrence_type: recurrenceType === "none" ? null : recurrenceType,
           recurrence_end_date: recurrenceEndDate ? format(recurrenceEndDate, "yyyy-MM-dd") : null,
           category,
+          is_private: isPrivate,
         })
         .eq("id", event.id)
         .eq("creator_id", user.id);
@@ -233,6 +237,24 @@ export function EditEventDialog({ event, open, onOpenChange }: EditEventDialogPr
             onRecurrenceTypeChange={setRecurrenceType}
             onRecurrenceEndDateChange={setRecurrenceEndDate}
           />
+
+          {/* Private Event Toggle */}
+          <div className="flex items-center justify-between rounded-lg border p-3 bg-secondary/30">
+            <div className="space-y-0.5">
+              <Label htmlFor="edit-private-toggle" className="flex items-center gap-2 cursor-pointer text-sm">
+                {isPrivate ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                Private Event
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Hidden from shared calendar views
+              </p>
+            </div>
+            <Switch
+              id="edit-private-toggle"
+              checked={isPrivate}
+              onCheckedChange={setIsPrivate}
+            />
+          </div>
         </div>
 
         <DialogFooter>

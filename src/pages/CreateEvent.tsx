@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Users, Flag, ArrowRight, Check, Loader2, Tag } from "lucide-react";
+import { Calendar, Clock, Users, Flag, ArrowRight, Check, Loader2, Tag, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -16,6 +16,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { RecurrenceSelect, RecurrenceType } from "@/components/RecurrenceSelect";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -39,6 +40,7 @@ export default function CreateEvent() {
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [category, setCategory] = useState<CategoryType>("default");
+  const [isPrivate, setIsPrivate] = useState(false);
 
   // Pre-fill from template params
   useEffect(() => {
@@ -109,6 +111,7 @@ export default function CreateEvent() {
           recurrence_type: recurrenceType === "none" ? null : recurrenceType,
           recurrence_end_date: recurrenceEndDate ? format(recurrenceEndDate, "yyyy-MM-dd") : null,
           category,
+          is_private: isPrivate,
         })
         .select()
         .single();
@@ -280,6 +283,24 @@ export default function CreateEvent() {
               onRecurrenceTypeChange={setRecurrenceType}
               onRecurrenceEndDateChange={setRecurrenceEndDate}
             />
+
+            {/* Private Event Toggle */}
+            <div className="flex items-center justify-between rounded-lg border p-4 bg-secondary/30">
+              <div className="space-y-0.5">
+                <Label htmlFor="private-toggle" className="flex items-center gap-2 cursor-pointer">
+                  {isPrivate ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                  Private Event
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Hide this event from friends who have access to your calendar
+                </p>
+              </div>
+              <Switch
+                id="private-toggle"
+                checked={isPrivate}
+                onCheckedChange={setIsPrivate}
+              />
+            </div>
 
             {/* Invite Friends */}
             <div className="space-y-2">
