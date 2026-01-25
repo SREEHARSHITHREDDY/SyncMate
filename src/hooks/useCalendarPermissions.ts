@@ -13,6 +13,15 @@ export interface CalendarPermission {
   updated_at: string;
 }
 
+export interface CalendarPermissionWithProfile extends CalendarPermission {
+  profile?: {
+    user_id: string;
+    name: string;
+    email: string;
+    avatar_url: string | null;
+  };
+}
+
 export function useCalendarPermissions() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -29,7 +38,22 @@ export function useCalendarPermissions() {
         .eq("viewer_id", user.id);
 
       if (error) throw error;
-      return data as CalendarPermission[];
+
+      // Get profiles for all owners
+      const ownerIds = data.map((p) => p.owner_id);
+      if (ownerIds.length === 0) return data as CalendarPermissionWithProfile[];
+
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("user_id, name, email, avatar_url")
+        .in("user_id", ownerIds);
+
+      if (profilesError) throw profilesError;
+
+      return data.map((permission) => ({
+        ...permission,
+        profile: profiles?.find((p) => p.user_id === permission.owner_id),
+      })) as CalendarPermissionWithProfile[];
     },
     enabled: !!user,
   });
@@ -46,7 +70,22 @@ export function useCalendarPermissions() {
         .eq("owner_id", user.id);
 
       if (error) throw error;
-      return data as CalendarPermission[];
+
+      // Get profiles for all viewers
+      const viewerIds = data.map((p) => p.viewer_id);
+      if (viewerIds.length === 0) return data as CalendarPermissionWithProfile[];
+
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("user_id, name, email, avatar_url")
+        .in("user_id", viewerIds);
+
+      if (profilesError) throw profilesError;
+
+      return data.map((permission) => ({
+        ...permission,
+        profile: profiles?.find((p) => p.user_id === permission.viewer_id),
+      })) as CalendarPermissionWithProfile[];
     },
     enabled: !!user,
   });
@@ -74,6 +113,59 @@ export function useCalendarPermissions() {
     },
   });
 
+  // Grant calendar access (accept a request)
+  const grantAccessMutation = useMutation({
+    mutationFn: async (permissionId: string) => {
+      const { data, error } = await supabase
+        .from("calendar_permissions")
+        .update({ status: "accepted" })
+        .eq("id", permissionId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-permissions-received"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-permissions-sent"] });
+    },
+  });
+
+  // Reject calendar access request
+  const rejectAccessMutation = useMutation({
+    mutationFn: async (permissionId: string) => {
+      const { data, error } = await supabase
+        .from("calendar_permissions")
+        .update({ status: "rejected" })
+        .eq("id", permissionId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-permissions-received"] });
+    },
+  });
+
+  // Revoke calendar access (delete the permission)
+  const revokeAccessMutation = useMutation({
+    mutationFn: async (permissionId: string) => {
+      const { error } = await supabase
+        .from("calendar_permissions")
+        .delete()
+        .eq("id", permissionId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-permissions-received"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-permissions-sent"] });
+    },
+  });
+
   // Check if a request exists for a specific owner
   const getRequestStatus = (ownerId: string): "none" | "pending" | "accepted" | "rejected" => {
     const request = sentRequestsQuery.data?.find((r) => r.owner_id === ownerId);
@@ -86,13 +178,49 @@ export function useCalendarPermissions() {
     return getRequestStatus(ownerId) === "accepted";
   };
 
+  // Get list of calendars the user has access to
+  const accessibleCalendars = (sentRequestsQuery.data || []).filter(
+    (p) => p.status === "accepted"
+  );
+
+  // Get pending requests received by the user
+  const pendingReceivedRequests = (receivedRequestsQuery.data || []).filter(
+    (p) => p.status === "pending"
+  );
+
+  // Get granted access (users who can view my calendar)
+  const grantedAccess = (receivedRequestsQuery.data || []).filter(
+    (p) => p.status === "accepted"
+  );
+
   return {
+    // Sent requests (as viewer)
     sentRequests: sentRequestsQuery.data || [],
     sentRequestsLoading: sentRequestsQuery.isLoading,
+    
+    // Received requests (as owner)
     receivedRequests: receivedRequestsQuery.data || [],
     receivedRequestsLoading: receivedRequestsQuery.isLoading,
+    
+    // Filtered lists
+    pendingReceivedRequests,
+    grantedAccess,
+    accessibleCalendars,
+    
+    // Mutations
     requestAccess: requestAccessMutation.mutateAsync,
     requestingAccess: requestAccessMutation.isPending,
+    
+    grantAccess: grantAccessMutation.mutateAsync,
+    grantingAccess: grantAccessMutation.isPending,
+    
+    rejectAccess: rejectAccessMutation.mutateAsync,
+    rejectingAccess: rejectAccessMutation.isPending,
+    
+    revokeAccess: revokeAccessMutation.mutateAsync,
+    revokingAccess: revokeAccessMutation.isPending,
+    
+    // Helpers
     getRequestStatus,
     hasAccessTo,
   };

@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Filter } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Filter, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
+import { useCalendarPermissions } from "@/hooks/useCalendarPermissions";
+import { useFriendCalendar } from "@/hooks/useFriendCalendar";
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, addYears, subYears } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -24,6 +26,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface EventException {
   id: string;
@@ -37,10 +46,13 @@ export default function CalendarPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { events } = useEvents();
+  const { accessibleCalendars } = useCalendarPermissions();
+  
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [selectedEvent, setSelectedEvent] = useState<(EventWithResponse & { isCancelled?: boolean }) | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<CategoryType[]>([]);
+  const [viewingCalendar, setViewingCalendar] = useState<string>("my"); // "my" or friend's user_id
   
   // Quick event dialog state
   const [quickEventOpen, setQuickEventOpen] = useState(false);
@@ -50,6 +62,10 @@ export default function CalendarPage() {
   // Edit event dialog state
   const [editEventOpen, setEditEventOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<EventWithResponse | null>(null);
+
+  // Fetch friend's calendar if viewing
+  const friendId = viewingCalendar !== "my" ? viewingCalendar : null;
+  const { events: friendEvents, exceptions: friendExceptions } = useFriendCalendar(friendId);
 
   // Fetch all exceptions for the user's events
   const { data: allExceptions = [] } = useQuery({
@@ -73,9 +89,13 @@ export default function CalendarPage() {
 
   // Add cancellation status to events and filter by category
   const eventsWithStatus = useMemo(() => {
-    let filtered = events.map((event) => {
-      const isCancelled = allExceptions.some(
-        ex => ex.event_id === event.id && ex.exception_date === event.event_date
+    // Use friend's events if viewing friend's calendar, otherwise own events
+    const activeEvents = viewingCalendar === "my" ? events : friendEvents;
+    const activeExceptions = viewingCalendar === "my" ? allExceptions : friendExceptions;
+    
+    let filtered = activeEvents.map((event) => {
+      const isCancelled = activeExceptions.some(
+        (ex: EventException) => ex.event_id === event.id && ex.exception_date === event.event_date
       );
       return { ...event, isCancelled };
     });
@@ -88,7 +108,14 @@ export default function CalendarPage() {
     }
 
     return filtered;
-  }, [events, allExceptions, selectedCategories]);
+  }, [events, friendEvents, allExceptions, friendExceptions, selectedCategories, viewingCalendar]);
+
+  // Get the name of the currently viewed calendar
+  const viewingCalendarName = useMemo(() => {
+    if (viewingCalendar === "my") return "My Calendar";
+    const friend = accessibleCalendars.find(c => c.owner_id === viewingCalendar);
+    return friend?.profile?.name ? `${friend.profile.name}'s Calendar` : "Friend's Calendar";
+  }, [viewingCalendar, accessibleCalendars]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -211,6 +238,23 @@ export default function CalendarPage() {
 
             {/* Right side - Actions */}
             <div className="flex items-center gap-2">
+              {/* Calendar Selector (only show if user has access to other calendars) */}
+              {accessibleCalendars.length > 0 && (
+                <Select value={viewingCalendar} onValueChange={setViewingCalendar}>
+                  <SelectTrigger className="w-[180px] h-9">
+                    <Users className="h-4 w-4 mr-2" />
+                    <SelectValue>{viewingCalendarName}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="my">My Calendar</SelectItem>
+                    {accessibleCalendars.map((cal) => (
+                      <SelectItem key={cal.id} value={cal.owner_id}>
+                        {cal.profile?.name || "Friend"}'s Calendar
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {/* Category Filter */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -239,14 +283,16 @@ export default function CalendarPage() {
                 Today
               </Button>
               
-              <Button size="sm" className="gap-2" onClick={() => {
-                setQuickEventDate(selectedDate);
-                setQuickEventTime("09:00");
-                setQuickEventOpen(true);
-              }}>
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Create Event</span>
-              </Button>
+              {viewingCalendar === "my" && (
+                <Button size="sm" className="gap-2" onClick={() => {
+                  setQuickEventDate(selectedDate);
+                  setQuickEventTime("09:00");
+                  setQuickEventOpen(true);
+                }}>
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Create Event</span>
+                </Button>
+              )}
             </div>
           </div>
         </div>
