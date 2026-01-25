@@ -7,7 +7,9 @@ import { useNavigate, Link } from "react-router-dom";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
 import { useCalendarPermissions } from "@/hooks/useCalendarPermissions";
 import { useFriendCalendar } from "@/hooks/useFriendCalendar";
-import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, addYears, subYears } from "date-fns";
+import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, addYears, subYears, parseISO, isAfter, isBefore } from "date-fns";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CalendarRange, Clock, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -65,7 +67,22 @@ export default function CalendarPage() {
 
   // Fetch friend's calendar if viewing
   const friendId = viewingCalendar !== "my" ? viewingCalendar : null;
-  const { events: friendEvents, exceptions: friendExceptions } = useFriendCalendar(friendId);
+  const { events: friendEvents, exceptions: friendExceptions, permission: friendPermission } = useFriendCalendar(friendId);
+
+  // Check if viewing a restricted calendar
+  const viewRestrictions = useMemo(() => {
+    if (!friendPermission) return null;
+    
+    const hasViewFromDate = !!friendPermission.view_from_date;
+    const hasExpiresAt = !!friendPermission.expires_at;
+    
+    if (!hasViewFromDate && !hasExpiresAt) return null;
+    
+    return {
+      viewFromDate: friendPermission.view_from_date,
+      expiresAt: friendPermission.expires_at,
+    };
+  }, [friendPermission]);
 
   // Fetch all exceptions for the user's events
   const { data: allExceptions = [] } = useQuery({
@@ -296,6 +313,30 @@ export default function CalendarPage() {
             </div>
           </div>
         </div>
+
+        {/* View Restriction Banner */}
+        {viewingCalendar !== "my" && viewRestrictions && (
+          <div className="flex-shrink-0 px-4 pt-3">
+            <Alert className="bg-muted/50 border-primary/20">
+              <Info className="h-4 w-4" />
+              <AlertDescription className="flex items-center gap-4 flex-wrap">
+                <span className="font-medium">Restricted View:</span>
+                {viewRestrictions.viewFromDate && (
+                  <span className="flex items-center gap-1.5 text-sm">
+                    <CalendarRange className="h-3.5 w-3.5" />
+                    Events from {format(parseISO(viewRestrictions.viewFromDate), "MMM d, yyyy")}
+                  </span>
+                )}
+                {viewRestrictions.expiresAt && (
+                  <span className="flex items-center gap-1.5 text-sm">
+                    <Clock className="h-3.5 w-3.5" />
+                    Access expires {format(parseISO(viewRestrictions.expiresAt), "MMM d, yyyy")}
+                  </span>
+                )}
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
 
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
