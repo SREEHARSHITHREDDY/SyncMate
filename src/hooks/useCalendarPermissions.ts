@@ -113,12 +113,21 @@ export function useCalendarPermissions() {
     },
   });
 
-  // Grant calendar access (accept a request)
+  // Grant calendar access (accept a request) with optional date restrictions
   const grantAccessMutation = useMutation({
-    mutationFn: async (permissionId: string) => {
+    mutationFn: async (params: { 
+      permissionId: string; 
+      viewFromDate?: string | null;
+      expiresAt?: string | null;
+    }) => {
+      const { permissionId, viewFromDate, expiresAt } = params;
       const { data, error } = await supabase
         .from("calendar_permissions")
-        .update({ status: "accepted" })
+        .update({ 
+          status: "accepted",
+          view_from_date: viewFromDate || null,
+          expires_at: expiresAt || null,
+        })
         .eq("id", permissionId)
         .select()
         .single();
@@ -129,6 +138,32 @@ export function useCalendarPermissions() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-permissions-received"] });
       queryClient.invalidateQueries({ queryKey: ["calendar-permissions-sent"] });
+    },
+  });
+
+  // Update permission restrictions
+  const updatePermissionMutation = useMutation({
+    mutationFn: async (params: { 
+      permissionId: string; 
+      viewFromDate?: string | null;
+      expiresAt?: string | null;
+    }) => {
+      const { permissionId, viewFromDate, expiresAt } = params;
+      const { data, error } = await supabase
+        .from("calendar_permissions")
+        .update({ 
+          view_from_date: viewFromDate,
+          expires_at: expiresAt,
+        })
+        .eq("id", permissionId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-permissions-received"] });
     },
   });
 
@@ -213,6 +248,9 @@ export function useCalendarPermissions() {
     
     grantAccess: grantAccessMutation.mutateAsync,
     grantingAccess: grantAccessMutation.isPending,
+    
+    updatePermission: updatePermissionMutation.mutateAsync,
+    updatingPermission: updatePermissionMutation.isPending,
     
     rejectAccess: rejectAccessMutation.mutateAsync,
     rejectingAccess: rejectAccessMutation.isPending,
