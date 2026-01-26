@@ -3,8 +3,9 @@
 ## Project info
 
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
-
 ## How can I edit this code?
+
+change to the readme
 
 There are several ways of editing your application.
 
