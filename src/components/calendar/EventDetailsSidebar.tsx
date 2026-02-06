@@ -1,13 +1,18 @@
+import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { EventWithResponse } from "@/hooks/useEvents";
-import { Calendar, Clock, MapPin, Users, Repeat } from "lucide-react";
+import { Calendar, Clock, Repeat, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { MeetingMinutesDialog } from "@/components/MeetingMinutesDialog";
 
 interface EventDetailsSidebarProps {
   event: EventWithResponse & { isCancelled?: boolean };
 }
 
 export function EventDetailsSidebar({ event }: EventDetailsSidebarProps) {
+  const [showMinutesDialog, setShowMinutesDialog] = useState(false);
+
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
       case "low":
@@ -62,6 +67,27 @@ export function EventDetailsSidebar({ event }: EventDetailsSidebarProps) {
       {event.is_completed && !event.isCancelled && (
         <Badge variant="secondary">Completed</Badge>
       )}
+
+      {/* Meeting Minutes Button */}
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full gap-2"
+        onClick={() => setShowMinutesDialog(true)}
+      >
+        <FileText className="h-4 w-4" />
+        Meeting Minutes
+      </Button>
+
+      {/* Meeting Minutes Dialog */}
+      <MeetingMinutesDialog
+        eventId={event.id}
+        eventTitle={event.title}
+        eventDate={format(parseISO(event.event_date), "MMMM d, yyyy")}
+        open={showMinutesDialog}
+        onOpenChange={setShowMinutesDialog}
+        canEdit={event.isCreator || event.response === "yes"}
+      />
     </div>
   );
 }
