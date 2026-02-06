@@ -14,7 +14,6 @@ import { EventInviteCard } from "@/components/EventInviteCard";
 import { SwipeableEventCard } from "@/components/SwipeableEventCard";
 import { EditEventDialog } from "@/components/EditEventDialog";
 import { PriorityFilter } from "@/components/PriorityFilter";
-import { CompletedFilter } from "@/components/CompletedFilter";
 import { CancelOccurrenceDialog } from "@/components/CancelOccurrenceDialog";
 import { MyActionItems } from "@/components/MyActionItems";
 
@@ -35,7 +34,6 @@ export default function Dashboard() {
   const [editingEvent, setEditingEvent] = useState<EventWithResponse | null>(null);
   const [cancellingEvent, setCancellingEvent] = useState<EventWithResponse | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high">("all");
-  const [showCompleted, setShowCompleted] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -45,29 +43,27 @@ export default function Dashboard() {
 
   const userName = user?.user_metadata?.name || "there";
 
-  // Filter events by priority and completion status
+  // Filter active events by priority (exclude completed)
   const filteredEvents = useMemo(() => {
-    let filtered = events;
+    let filtered = events.filter((e) => !(e as any).is_completed);
     
     // Filter by priority
     if (priorityFilter !== "all") {
       filtered = filtered.filter((e) => e.priority === priorityFilter);
     }
     
-    // Filter by completion status
-    if (!showCompleted) {
-      filtered = filtered.filter((e) => !(e as any).is_completed);
-    }
-    
     return filtered;
-  }, [events, priorityFilter, showCompleted]);
+  }, [events, priorityFilter]);
 
-  // Count completed events
-  const completedCount = useMemo(() => {
-    return events.filter((e) => (e as any).is_completed).length;
+  // Get completed events
+  const completedEvents = useMemo(() => {
+    return events.filter((e) => (e as any).is_completed);
   }, [events]);
 
-  // Get upcoming events for this week
+  // Count completed events
+  const completedCount = completedEvents.length;
+
+  // Get upcoming events for this week (active only)
   const upcomingEvents = filteredEvents.slice(0, 5);
   const nextEvent = events.filter((e) => !(e as any).is_completed)[0];
 
@@ -202,7 +198,6 @@ export default function Dashboard() {
           <CardContent>
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <PriorityFilter value={priorityFilter} onChange={setPriorityFilter} />
-              <CompletedFilter showCompleted={showCompleted} onChange={setShowCompleted} />
             </div>
             {upcomingEvents.length > 0 ? (
               <div className="space-y-4">
@@ -220,15 +215,11 @@ export default function Dashboard() {
                 <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                   <Calendar className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="text-lg font-medium mb-2">
-                  {showCompleted ? "No events yet" : "No active events"}
-                </h3>
+                <h3 className="text-lg font-medium mb-2">No active events</h3>
                 <p className="text-muted-foreground max-w-sm mb-4">
-                  {showCompleted 
-                    ? "Start by creating an event or adding friends to plan something together!"
-                    : completedCount > 0 
-                      ? "All your events are completed! Toggle the filter to see them."
-                      : "Start by creating an event or adding friends to plan something together!"
+                  {completedCount > 0 
+                    ? "All your events are completed! Check the Completed section below."
+                    : "Start by creating an event or adding friends to plan something together!"
                   }
                 </p>
                 <Link to="/create-event">
@@ -241,6 +232,33 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Completed Events Section */}
+        {completedCount > 0 && (
+          <Card className="animate-fade-in mt-6" style={{ animationDelay: '0.35s' }}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+                Completed Events ({completedCount})
+              </CardTitle>
+              <CardDescription>
+                Access meeting minutes and details from completed events
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {completedEvents.map((event) => (
+                  <SwipeableEventCard
+                    key={event.id}
+                    event={event}
+                    onEdit={setEditingEvent}
+                    onCancelOccurrence={setCancellingEvent}
+                  />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Pending Event Invites */}
         {pendingInvites.length > 0 && (
