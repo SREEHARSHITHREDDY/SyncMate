@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,8 @@ import {
   Loader2,
   Repeat,
   CalendarX,
-  FileText
+  FileText,
+  Shield
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useState } from "react";
@@ -229,6 +231,12 @@ export function EventCard({ event, onEdit, onCancelOccurrence, showActions = tru
                     {(event as any).recurrence_type}
                   </Badge>
                 )}
+                {(event as any).lifecycle_status && (event as any).lifecycle_status !== "proposed" && (
+                  <Badge variant="outline" className="text-xs shrink-0 gap-1">
+                    {(event as any).is_frozen && <Shield className="h-3 w-3" />}
+                    {(event as any).lifecycle_status}
+                  </Badge>
+                )}
               </div>
               <div className={`flex items-center gap-3 text-sm mt-1 flex-wrap ${isStrikethrough ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
                 <span className={`flex items-center gap-1 ${isStrikethrough ? "line-through" : ""}`}>
@@ -317,6 +325,16 @@ export function EventCard({ event, onEdit, onCancelOccurrence, showActions = tru
         {/* Attendees and Minutes section */}
         <div className="mt-3 pt-3 border-t border-border">
           <div className="flex flex-wrap gap-2">
+            <Link to={`/event/${event.id}`}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-2 text-primary hover:text-primary px-2"
+              >
+                <Clock className="h-3 w-3" />
+                View Plan Details
+              </Button>
+            </Link>
             <Button
               variant="ghost"
               size="sm"
