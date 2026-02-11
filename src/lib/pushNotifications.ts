@@ -42,7 +42,7 @@ export async function subscribeToPush(userId: string): Promise<boolean> {
   }
 
   try {
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await navigator.serviceWorker.ready as ServiceWorkerRegistration & { pushManager: PushManager };
     
     // Check if already subscribed
     let subscription = await registration.pushManager.getSubscription();
@@ -82,7 +82,7 @@ export async function subscribeToPush(userId: string): Promise<boolean> {
 
 export async function unsubscribeFromPush(userId: string): Promise<boolean> {
   try {
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await navigator.serviceWorker.ready as ServiceWorkerRegistration & { pushManager: PushManager };
     const subscription = await registration.pushManager.getSubscription();
     
     if (subscription) {
