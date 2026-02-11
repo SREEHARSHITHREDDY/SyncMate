@@ -148,6 +148,44 @@ export type Database = {
           },
         ]
       }
+      availability_slots: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          slot_date: string
+          slot_end: string
+          slot_start: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          slot_date: string
+          slot_end: string
+          slot_start: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          slot_date?: string
+          slot_end?: string
+          slot_start?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_slots_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_permissions: {
         Row: {
           created_at: string
@@ -181,6 +219,38 @@ export type Database = {
         }
         Relationships: []
       }
+      change_request_votes: {
+        Row: {
+          change_request_id: string
+          created_at: string
+          id: string
+          user_id: string
+          vote: string
+        }
+        Insert: {
+          change_request_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+          vote: string
+        }
+        Update: {
+          change_request_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          vote?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "change_request_votes_change_request_id_fkey"
+            columns: ["change_request_id"]
+            isOneToOne: false
+            referencedRelation: "plan_change_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_exceptions: {
         Row: {
           created_at: string
@@ -212,6 +282,7 @@ export type Database = {
       }
       event_responses: {
         Row: {
+          commitment_status: string
           created_at: string
           event_id: string
           id: string
@@ -220,6 +291,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          commitment_status?: string
           created_at?: string
           event_id: string
           id?: string
@@ -228,6 +300,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          commitment_status?: string
           created_at?: string
           event_id?: string
           id?: string
@@ -295,12 +368,19 @@ export type Database = {
           description: string | null
           event_date: string
           event_time: string
+          frozen_at: string | null
+          frozen_by: string | null
           id: string
           is_completed: boolean
+          is_frozen: boolean
           is_private: boolean
+          lifecycle_status: string
           priority: string
           recurrence_end_date: string | null
           recurrence_type: string | null
+          suggested_date: string | null
+          suggested_end_time: string | null
+          suggested_start_time: string | null
           title: string
           updated_at: string
         }
@@ -311,12 +391,19 @@ export type Database = {
           description?: string | null
           event_date: string
           event_time: string
+          frozen_at?: string | null
+          frozen_by?: string | null
           id?: string
           is_completed?: boolean
+          is_frozen?: boolean
           is_private?: boolean
+          lifecycle_status?: string
           priority?: string
           recurrence_end_date?: string | null
           recurrence_type?: string | null
+          suggested_date?: string | null
+          suggested_end_time?: string | null
+          suggested_start_time?: string | null
           title: string
           updated_at?: string
         }
@@ -327,12 +414,19 @@ export type Database = {
           description?: string | null
           event_date?: string
           event_time?: string
+          frozen_at?: string | null
+          frozen_by?: string | null
           id?: string
           is_completed?: boolean
+          is_frozen?: boolean
           is_private?: boolean
+          lifecycle_status?: string
           priority?: string
           recurrence_end_date?: string | null
           recurrence_type?: string | null
+          suggested_date?: string | null
+          suggested_end_time?: string | null
+          suggested_start_time?: string | null
           title?: string
           updated_at?: string
         }
@@ -503,6 +597,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      plan_change_requests: {
+        Row: {
+          approvals_needed: number
+          approvals_received: number
+          change_description: string
+          created_at: string
+          event_id: string
+          id: string
+          requested_by: string
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          approvals_needed?: number
+          approvals_received?: number
+          change_description: string
+          created_at?: string
+          event_id: string
+          id?: string
+          requested_by: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          approvals_needed?: number
+          approvals_received?: number
+          change_description?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          requested_by?: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_change_requests_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

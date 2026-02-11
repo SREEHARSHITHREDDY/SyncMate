@@ -6,97 +6,97 @@
 
 @layer base {
   :root {
-    /* Warm, calm color palette for SyncMates */
-    --background: 40 20% 98%;
-    --foreground: 220 20% 15%;
+    /* Clean blue/white coordination platform palette */
+    --background: 210 40% 98%;
+    --foreground: 215 25% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 15%;
+    --card-foreground: 215 25% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 15%;
+    --popover-foreground: 215 25% 15%;
 
-    /* Soft sage green - calming, social, friendly */
-    --primary: 152 35% 45%;
+    /* Professional blue primary */
+    --primary: 215 70% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* Warm neutral for secondary elements */
-    --secondary: 40 15% 94%;
-    --secondary-foreground: 220 15% 25%;
+    /* Cool neutral for secondary */
+    --secondary: 210 20% 94%;
+    --secondary-foreground: 215 20% 25%;
 
-    --muted: 40 10% 92%;
-    --muted-foreground: 220 10% 45%;
+    --muted: 210 15% 92%;
+    --muted-foreground: 215 10% 45%;
 
-    /* Soft coral accent for highlights */
-    --accent: 15 70% 60%;
+    /* Subtle blue accent */
+    --accent: 215 60% 60%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 70% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 40 15% 88%;
-    --input: 40 15% 88%;
-    --ring: 152 35% 45%;
+    --border: 210 20% 88%;
+    --input: 210 20% 88%;
+    --ring: 215 70% 50%;
 
     --radius: 0.75rem;
 
-    /* Custom tokens for SyncMates */
+    /* Status tokens */
     --success: 152 50% 45%;
     --warning: 40 90% 55%;
-    --info: 210 70% 55%;
+    --info: 215 70% 55%;
 
     /* Priority colors */
     --priority-low: 152 40% 50%;
     --priority-medium: 40 80% 50%;
     --priority-high: 0 65% 55%;
 
-    --sidebar-background: 40 15% 96%;
-    --sidebar-foreground: 220 15% 25%;
-    --sidebar-primary: 152 35% 45%;
+    --sidebar-background: 210 20% 96%;
+    --sidebar-foreground: 215 20% 25%;
+    --sidebar-primary: 215 70% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 40 15% 92%;
-    --sidebar-accent-foreground: 220 15% 25%;
-    --sidebar-border: 40 15% 88%;
-    --sidebar-ring: 152 35% 45%;
+    --sidebar-accent: 210 20% 92%;
+    --sidebar-accent-foreground: 215 20% 25%;
+    --sidebar-border: 210 20% 88%;
+    --sidebar-ring: 215 70% 50%;
   }
 
   .dark {
-    --background: 220 20% 10%;
-    --foreground: 40 15% 95%;
+    --background: 215 25% 9%;
+    --foreground: 210 20% 95%;
 
-    --card: 220 20% 12%;
-    --card-foreground: 40 15% 95%;
+    --card: 215 25% 11%;
+    --card-foreground: 210 20% 95%;
 
-    --popover: 220 20% 12%;
-    --popover-foreground: 40 15% 95%;
+    --popover: 215 25% 11%;
+    --popover-foreground: 210 20% 95%;
 
-    --primary: 152 40% 50%;
-    --primary-foreground: 220 20% 10%;
+    --primary: 215 65% 55%;
+    --primary-foreground: 215 25% 9%;
 
-    --secondary: 220 15% 18%;
-    --secondary-foreground: 40 15% 90%;
+    --secondary: 215 20% 18%;
+    --secondary-foreground: 210 20% 90%;
 
-    --muted: 220 15% 20%;
-    --muted-foreground: 40 10% 60%;
+    --muted: 215 20% 20%;
+    --muted-foreground: 210 15% 60%;
 
-    --accent: 15 60% 55%;
+    --accent: 215 55% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 60% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 20%;
-    --input: 220 15% 20%;
-    --ring: 152 40% 50%;
+    --border: 215 20% 20%;
+    --input: 215 20% 20%;
+    --ring: 215 65% 55%;
 
-    --sidebar-background: 220 20% 8%;
-    --sidebar-foreground: 40 15% 90%;
-    --sidebar-primary: 152 40% 50%;
-    --sidebar-primary-foreground: 220 20% 10%;
-    --sidebar-accent: 220 15% 15%;
-    --sidebar-accent-foreground: 40 15% 90%;
-    --sidebar-border: 220 15% 18%;
-    --sidebar-ring: 152 40% 50%;
+    --sidebar-background: 215 25% 8%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 215 65% 55%;
+    --sidebar-primary-foreground: 215 25% 9%;
+    --sidebar-accent: 215 20% 15%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 215 20% 18%;
+    --sidebar-ring: 215 65% 55%;
   }
 }
 
