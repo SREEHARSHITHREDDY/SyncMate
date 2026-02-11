@@ -6,26 +6,26 @@
 
 @layer base {
   :root {
-    /* Clean green/white coordination platform palette */
-    --background: 140 30% 97%;
-    --foreground: 150 25% 12%;
+    /* Clean neutral backdrop with green accents */
+    --background: 0 0% 98%;
+    --foreground: 150 15% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 150 25% 12%;
+    --card-foreground: 150 15% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 150 25% 12%;
+    --popover-foreground: 150 15% 12%;
 
     /* Professional green primary */
     --primary: 152 55% 40%;
     --primary-foreground: 0 0% 100%;
 
     /* Warm neutral for secondary */
-    --secondary: 140 15% 93%;
-    --secondary-foreground: 150 20% 25%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 150 15% 25%;
 
-    --muted: 140 10% 91%;
-    --muted-foreground: 150 10% 45%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 45%;
 
     /* Subtle green accent */
     --accent: 152 45% 50%;
@@ -34,8 +34,8 @@
     --destructive: 0 70% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 140 15% 87%;
-    --input: 140 15% 87%;
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
     --ring: 152 55% 40%;
 
     --radius: 0.75rem;
@@ -50,13 +50,13 @@
     --priority-medium: 40 80% 50%;
     --priority-high: 0 65% 55%;
 
-    --sidebar-background: 140 15% 95%;
-    --sidebar-foreground: 150 20% 25%;
+    --sidebar-background: 0 0% 96%;
+    --sidebar-foreground: 150 15% 25%;
     --sidebar-primary: 152 55% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 140 15% 91%;
-    --sidebar-accent-foreground: 150 20% 25%;
-    --sidebar-border: 140 15% 87%;
+    --sidebar-accent: 0 0% 92%;
+    --sidebar-accent-foreground: 150 15% 25%;
+    --sidebar-border: 0 0% 88%;
     --sidebar-ring: 152 55% 40%;
   }
 
