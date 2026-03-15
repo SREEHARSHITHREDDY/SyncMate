@@ -42,12 +42,15 @@ export function useEventParticipants(eventId: string) {
         });
       }
 
-      // Get confirmed attendees
+      // FIX: was .eq("response", "accepted") — that value never exists.
+      // Event responses use "yes" / "no" / "maybe" / "pending".
+      // This was causing the collaborative editor mention list to always be empty
+      // and meeting minutes @mention notifications to never fire.
       const { data: responses } = await supabase
         .from("event_responses")
         .select("user_id")
         .eq("event_id", eventId)
-        .eq("response", "accepted");
+        .eq("response", "yes");
 
       if (responses) {
         for (const response of responses) {
@@ -74,6 +77,7 @@ export function useEventParticipants(eventId: string) {
       return participants;
     },
     enabled: !!eventId && !!user,
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -82,11 +86,11 @@ export function extractMentions(content: string): string[] {
   const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
   const mentions: string[] = [];
   let match;
-  
+
   while ((match = mentionRegex.exec(content)) !== null) {
     mentions.push(match[2]); // user ID
   }
-  
+
   return [...new Set(mentions)]; // unique user IDs
 }
 
