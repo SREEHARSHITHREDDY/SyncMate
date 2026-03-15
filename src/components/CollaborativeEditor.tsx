@@ -71,15 +71,15 @@ export function CollaborativeEditor({
     // Find the @ symbol position
     const beforeCursor = localValue.slice(0, cursorPosition);
     const atIndex = beforeCursor.lastIndexOf("@");
-    
+
     if (atIndex === -1) return;
 
     const beforeAt = localValue.slice(0, atIndex);
     const afterCursor = localValue.slice(cursorPosition);
-    
+
     const mention = formatMention(participant.name, participant.userId);
     const newValue = beforeAt + mention + " " + afterCursor;
-    
+
     setLocalValue(newValue);
     onChange(newValue);
     setShowMentions(false);
@@ -101,7 +101,7 @@ export function CollaborativeEditor({
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     const newCursorPosition = e.target.selectionStart || 0;
-    
+
     setLocalValue(newValue);
     setCursorPosition(newCursorPosition);
     onChange(newValue);
@@ -110,10 +110,9 @@ export function CollaborativeEditor({
     // Check for @ mention trigger
     const beforeCursor = newValue.slice(0, newCursorPosition);
     const lastAtIndex = beforeCursor.lastIndexOf("@");
-    
+
     if (lastAtIndex !== -1) {
       const afterAt = beforeCursor.slice(lastAtIndex + 1);
-      // Check if there's no space between @ and cursor (active mention)
       if (!afterAt.includes(" ") && !afterAt.includes("\n")) {
         setShowMentions(true);
         setMentionSearch(afterAt);
@@ -125,7 +124,7 @@ export function CollaborativeEditor({
       setShowMentions(false);
       setMentionSearch("");
     }
-    
+
     // Debounced broadcast to other editors
     if (minuteId) {
       broadcastContent(newValue);
@@ -138,13 +137,13 @@ export function CollaborativeEditor({
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setMentionIndex((prev) => 
+        setMentionIndex((prev) =>
           prev < filteredParticipants.length - 1 ? prev + 1 : 0
         );
         break;
       case "ArrowUp":
         e.preventDefault();
-        setMentionIndex((prev) => 
+        setMentionIndex((prev) =>
           prev > 0 ? prev - 1 : filteredParticipants.length - 1
         );
         break;
@@ -161,7 +160,6 @@ export function CollaborativeEditor({
   };
 
   const handleBlur = () => {
-    // Delay hiding to allow click on mention item
     setTimeout(() => {
       setShowMentions(false);
     }, 200);
@@ -179,7 +177,8 @@ export function CollaborativeEditor({
             {activeEditors.length} other{activeEditors.length > 1 ? "s" : ""} viewing
           </span>
           {activeEditors.map((editor) => (
-            <Badge key={editor.oderId} variant="secondary" className="text-xs px-1.5 py-0">
+            // FIX: was editor.oderId — now editor.userId
+            <Badge key={editor.userId} variant="secondary" className="text-xs px-1.5 py-0">
               {editor.userName}
               {editor.isTyping && " (typing...)"}
             </Badge>
