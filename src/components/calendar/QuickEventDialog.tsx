@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,11 +52,14 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [category, setCategory] = useState<CategoryType>("default");
 
-  // Reset form when dialog opens with new date/time
-  useState(() => {
-    if (initialDate) setDate(initialDate);
-    if (initialTime) setTime(initialTime);
-  });
+  // FIX: was useState(() => {...}) which silently does nothing.
+  // useEffect correctly syncs props when dialog opens.
+  useEffect(() => {
+    if (open) {
+      if (initialDate) setDate(initialDate);
+      if (initialTime) setTime(initialTime);
+    }
+  }, [open, initialDate, initialTime]);
 
   const handleCreate = async () => {
     if (!user || !title.trim() || !date || !time) {
@@ -83,13 +86,13 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
 
       toast.success("Event created!");
       queryClient.invalidateQueries({ queryKey: ["events"] });
-      
+
       // Reset form
       setTitle("");
       setDescription("");
       setPriority("medium");
       setCategory("default");
-      
+
       onOpenChange(false);
     } catch (error: any) {
       toast.error(error.message || "Failed to create event");
