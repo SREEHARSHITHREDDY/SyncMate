@@ -33,7 +33,6 @@ export function useUserActionItems(includeCompleted = false) {
   const actionItemsQuery = useQuery({
     queryKey: ["user-action-items", user?.id, includeCompleted],
     queryFn: async () => {
-      // Get all action items assigned to the current user
       let query = supabase
         .from("action_items")
         .select("*")
@@ -45,10 +44,12 @@ export function useUserActionItems(includeCompleted = false) {
       }
 
       const { data: actionItems, error } = await query;
-
       if (error) throw error;
 
-      // Fetch event titles for each action item
+      // FIX: guard against empty array before querying events
+      // (previously would send .in("id", []) which is a no-op but wastes a round trip)
+      if (actionItems.length === 0) return [];
+
       const eventIds = [...new Set(actionItems.map((item) => item.event_id))];
       const { data: events } = await supabase
         .from("events")
@@ -68,9 +69,13 @@ export function useUserActionItems(includeCompleted = false) {
       })) as UserActionItem[];
     },
     enabled: !!user,
+    // FIX: was missing staleTime — caused a full refetch every time the user
+    // navigated back to MyTasks, which felt like a lag/freeze.
+    // 2 minutes is enough; realtime subscription keeps data fresh anyway.
+    staleTime: 1000 * 60 * 2,
   });
 
-  // Set up realtime subscription for action items
+  // Realtime subscription keeps the cache fresh automatically
   useEffect(() => {
     if (!user) return;
 
@@ -95,17 +100,15 @@ export function useUserActionItems(includeCompleted = false) {
     };
   }, [user, queryClient, includeCompleted]);
 
-  // Calculate counts
   const items = actionItemsQuery.data || [];
   const incompleteItems = items.filter(item => !item.is_completed);
   const completedItems = items.filter(item => item.is_completed);
-  
-  // Get all unique tags
   const allTags = [...new Set(items.flatMap(item => item.tags || []))].sort();
-  
+
   const overdueCount = incompleteItems.filter(
     (item) => item.due_date && new Date(item.due_date) < new Date()
   ).length;
+
   const dueSoonCount = incompleteItems.filter((item) => {
     if (!item.due_date) return false;
     const dueDate = new Date(item.due_date);

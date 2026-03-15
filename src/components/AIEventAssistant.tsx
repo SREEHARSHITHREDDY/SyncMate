@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 
-// All possible suggestions - will be randomly selected
 const ALL_SUGGESTIONS = [
   { text: "Schedule a coffee with Sarah next Friday at 10am", category: "create" },
   { text: "Book a team meeting for Monday at 2pm", category: "create" },
@@ -45,7 +44,6 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const [creatingEvent, setCreatingEvent] = useState(false);
-  const [createdEvents, setCreatedEvents] = useState<Set<string>>(new Set());
   const [isListening, setIsListening] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [handsFreeMode, setHandsFreeMode] = useState(false);
@@ -62,40 +60,36 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     }
   }, [open]);
 
-  // Get random suggestions - changes each time suggestionSeed changes
   const randomSuggestions = useMemo(() => {
-    // Shuffle and pick 4 suggestions from different categories
     const shuffled = [...ALL_SUGGESTIONS].sort(() => Math.random() - 0.5);
     const selected: typeof ALL_SUGGESTIONS = [];
     const usedCategories = new Set<string>();
-    
-    // Try to get one from each category first
     for (const item of shuffled) {
       if (!usedCategories.has(item.category) && selected.length < 4) {
         selected.push(item);
         usedCategories.add(item.category);
       }
     }
-    
-    // Fill remaining slots if needed
     for (const item of shuffled) {
       if (selected.length >= 4) break;
-      if (!selected.includes(item)) {
-        selected.push(item);
-      }
+      if (!selected.includes(item)) selected.push(item);
     }
-    
     return selected.slice(0, 4);
   }, [suggestionSeed]);
 
-  // Check for Web Speech API support
-  const speechSupported = typeof window !== 'undefined' && 
+  const speechSupported = typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
-  // Start listening for hands-free mode
+  const stopListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+    try {
+      recognitionRef.current.stop();
+    } catch {}
+    setIsListening(false);
+  }, []);
+
   const startListening = useCallback(() => {
     if (!recognitionRef.current || isLoading || isSpeaking) return;
-    
     try {
       setInput('');
       recognitionRef.current.start();
@@ -105,19 +99,7 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     }
   }, [isLoading, isSpeaking]);
 
-  // Stop listening
-  const stopListening = useCallback(() => {
-    if (!recognitionRef.current) return;
-    
-    try {
-      recognitionRef.current.stop();
-    } catch (error) {
-      console.error('Failed to stop listening:', error);
-    }
-    setIsListening(false);
-  }, []);
-
-  // Initialize speech recognition with enhanced handlers
+  // Initialize speech recognition
   useEffect(() => {
     if (!speechSupported) return;
 
@@ -131,7 +113,6 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
 
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
-      
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
@@ -140,10 +121,7 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
           interimTranscript += transcript;
         }
       }
-      
       setInput(finalTranscript || interimTranscript);
-      
-      // Store final transcript for submission
       if (finalTranscript) {
         pendingSubmitRef.current = finalTranscript;
       }
@@ -152,12 +130,10 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
-      
       if (event.error === 'not-allowed') {
         toast.error('Microphone access denied. Please enable it in your browser settings.');
         setHandsFreeMode(false);
       } else if (event.error === 'no-speech' && handsFreeMode) {
-        // In hands-free mode, restart listening if no speech detected
         setTimeout(() => {
           if (handsFreeMode && !isLoading && !isSpeaking) {
             startListening();
@@ -168,12 +144,9 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
 
     recognition.onend = () => {
       setIsListening(false);
-      
-      // Auto-submit in hands-free mode when speech ends
       if (pendingSubmitRef.current && handsFreeMode) {
         const transcript = pendingSubmitRef.current;
         pendingSubmitRef.current = null;
-        
         if (transcript.trim()) {
           setInput('');
           sendMessage(transcript.trim());
@@ -188,54 +161,21 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     };
   }, [speechSupported, handsFreeMode, isLoading, isSpeaking, sendMessage, startListening]);
 
-  // Restart listening after TTS finishes speaking (hands-free mode)
+  // Restart listening after TTS finishes (hands-free mode)
   useEffect(() => {
     if (handsFreeMode && !isSpeaking && !isLoading && !isListening && messages.length > 0) {
-      // Small delay before starting to listen again
       handsFreeTimeoutRef.current = setTimeout(() => {
         if (handsFreeMode && !isSpeaking && !isLoading) {
           startListening();
         }
       }, 1000);
     }
-
     return () => {
       if (handsFreeTimeoutRef.current) {
         clearTimeout(handsFreeTimeoutRef.current);
       }
     };
   }, [handsFreeMode, isSpeaking, isLoading, isListening, messages.length, startListening]);
-
-  // Toggle hands-free mode
-  const toggleHandsFreeMode = useCallback(() => {
-    if (handsFreeMode) {
-      // Turning off
-      setHandsFreeMode(false);
-      stopListening();
-      stop();
-      toast.info("Hands-free mode disabled");
-    } else {
-      // Turning on
-      if (!speechSupported) {
-        toast.error("Speech recognition not supported in your browser");
-        return;
-      }
-      setHandsFreeMode(true);
-      setVoiceEnabled(true); // Enable TTS when entering hands-free mode
-      toast.success("Hands-free mode enabled! Start speaking...");
-      startListening();
-    }
-  }, [handsFreeMode, speechSupported, stopListening, stop, startListening]);
-
-  const toggleListening = useCallback(() => {
-    if (!recognitionRef.current) return;
-
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
-  }, [isListening, startListening, stopListening]);
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -244,15 +184,18 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     }
   }, [messages]);
 
-  // Auto-speak new assistant messages
+  // Auto-speak new assistant messages — ONLY when dialog is open
   useEffect(() => {
+    // FIX: added `open` check — previously TTS would fire even after the dialog
+    // was closed because the effect only depended on messages/voiceEnabled.
+    if (!open) return;
     if (messages.length > 0 && voiceEnabled && ttsSupported) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.role === "assistant" && !isLoading) {
         speak(lastMessage.content);
       }
     }
-  }, [messages, voiceEnabled, ttsSupported, speak, isLoading]);
+  }, [messages, voiceEnabled, ttsSupported, speak, isLoading, open]);
 
   useEffect(() => {
     if (open && inputRef.current && !handsFreeMode) {
@@ -260,19 +203,77 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     }
   }, [open, handsFreeMode]);
 
-  // Cleanup on unmount or close
+  // FIX: Stop ALL audio and recognition when dialog closes.
+  // Also stop when the browser tab loses focus (visibilitychange) so it doesn't
+  // keep listening/speaking when you switch tabs.
   useEffect(() => {
     if (!open) {
+      // Stop speech recognition
       stopListening();
+      // Stop text-to-speech
       stop();
+      // Cancel any pending hands-free restart timer
+      if (handsFreeTimeoutRef.current) {
+        clearTimeout(handsFreeTimeoutRef.current);
+      }
+      // Turn off hands-free mode
       setHandsFreeMode(false);
+      // Clear any pending voice submission
+      pendingSubmitRef.current = null;
     }
   }, [open, stopListening, stop]);
+
+  // FIX: Stop voice when user switches to another browser tab.
+  // Previously the mic kept listening and TTS kept playing even in background tabs,
+  // which caused the "noise when typing in other tabs" bug.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab is hidden — stop everything
+        stopListening();
+        stop();
+        if (handsFreeTimeoutRef.current) {
+          clearTimeout(handsFreeTimeoutRef.current);
+        }
+        pendingSubmitRef.current = null;
+        // Don't turn off handsFreeMode — just pause it so it can resume when tab is visible again
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [stopListening, stop]);
+
+  const toggleHandsFreeMode = useCallback(() => {
+    if (handsFreeMode) {
+      setHandsFreeMode(false);
+      stopListening();
+      stop();
+      toast.info("Hands-free mode disabled");
+    } else {
+      if (!speechSupported) {
+        toast.error("Speech recognition not supported in your browser");
+        return;
+      }
+      setHandsFreeMode(true);
+      setVoiceEnabled(true);
+      toast.success("Hands-free mode enabled! Start speaking...");
+      startListening();
+    }
+  }, [handsFreeMode, speechSupported, stopListening, stop, startListening]);
+
+  const toggleListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  }, [isListening, startListening, stopListening]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-
     const message = input;
     setInput("");
     await sendMessage(message);
@@ -286,18 +287,7 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
     description?: string;
   }) => {
     if (!user) return;
-    
-    // Create unique key for this event
-    const eventKey = `${parsedEvent.title}-${parsedEvent.date}-${parsedEvent.time}`;
-    
-    // Check if already created
-    if (createdEvents.has(eventKey)) {
-      toast.info("This event has already been created!");
-      return;
-    }
-    
     setCreatingEvent(true);
-
     try {
       const { error } = await supabase.from("events").insert({
         creator_id: user.id,
@@ -307,11 +297,7 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
         event_time: parsedEvent.time,
         priority: parsedEvent.priority,
       });
-
       if (error) throw error;
-
-      // Mark this event as created
-      setCreatedEvents(prev => new Set(prev).add(eventKey));
       toast.success(`Event "${parsedEvent.title}" created successfully!`);
       queryClient.invalidateQueries({ queryKey: ["events"] });
     } catch (error: any) {
@@ -323,155 +309,118 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
 
   const handleCreateFromTimeSuggestion = async (suggestion: { time: string; date: string }) => {
     if (!user) return;
-    
-    // Extract time from the suggestion (format: "Tuesday, Jan 14 at 2:00 PM" or similar)
     const timeMatch = suggestion.time.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)?/i);
     let eventTime = "09:00";
-    
     if (timeMatch) {
       let hours = parseInt(timeMatch[1]);
-      const minutes = timeMatch[2] || "00";
-      const meridiem = timeMatch[3]?.toUpperCase();
-      
-      if (meridiem === "PM" && hours < 12) hours += 12;
-      if (meridiem === "AM" && hours === 12) hours = 0;
-      
-      eventTime = `${hours.toString().padStart(2, "0")}:${minutes}`;
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      const period = timeMatch[3]?.toUpperCase();
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      eventTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
-
-    // Use the date from suggestion or calculate from the day name
-    let eventDate = suggestion.date;
-    if (!eventDate || eventDate === "undefined") {
-      // Try to parse from the time string (e.g., "Tuesday, Jan 14")
-      const today = new Date();
-      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const dayMatch = suggestion.time.match(new RegExp(dayNames.join("|"), "i"));
-      
-      if (dayMatch) {
-        const targetDay = dayNames.findIndex(d => d.toLowerCase() === dayMatch[0].toLowerCase());
-        const currentDay = today.getDay();
-        let daysUntil = targetDay - currentDay;
-        if (daysUntil <= 0) daysUntil += 7;
-        
-        const targetDate = new Date(today);
-        targetDate.setDate(today.getDate() + daysUntil);
-        eventDate = targetDate.toISOString().split('T')[0];
-      } else {
-        eventDate = today.toISOString().split('T')[0];
-      }
+    const eventDate = suggestion.date || new Date().toISOString().split('T')[0];
+    try {
+      const { error } = await supabase.from("events").insert({
+        creator_id: user.id,
+        title: "New Event",
+        event_date: eventDate,
+        event_time: eventTime,
+        priority: "medium",
+      });
+      if (error) throw error;
+      toast.success(`Event scheduled for ${suggestion.time}!`);
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create event");
     }
-
-    // Prompt user for event title
-    setInput(`Schedule [event name] for ${suggestion.time}`);
-    inputRef.current?.focus();
-    toast.info("Enter an event name to create the event!");
   };
 
-  if (!open) return null;
-
   return (
-    <Card className="fixed bottom-20 right-4 w-[380px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-8rem)] shadow-2xl z-50 flex flex-col animate-in slide-in-from-bottom-4 duration-300">
-      <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b shrink-0">
+    <Card
+      className={cn(
+        "fixed bottom-20 right-4 w-[400px] max-w-[calc(100vw-2rem)] shadow-2xl z-50 flex flex-col transition-all duration-300",
+        open
+          ? "opacity-100 translate-y-0 pointer-events-auto"
+          : "opacity-0 translate-y-4 pointer-events-none"
+      )}
+      style={{ maxHeight: "calc(100vh - 120px)" }}
+    >
+      <CardHeader className="flex flex-row items-center justify-between p-4 pb-2 shrink-0">
         <CardTitle className="text-base flex items-center gap-2">
-          <div className={cn(
-            "h-8 w-8 rounded-full flex items-center justify-center transition-all",
-            handsFreeMode 
-              ? "bg-gradient-to-br from-success to-primary animate-pulse" 
-              : "bg-gradient-to-br from-primary to-accent"
-          )}>
-            {handsFreeMode ? (
-              <Radio className="h-4 w-4 text-white" />
-            ) : (
-              <Sparkles className="h-4 w-4 text-white" />
-            )}
+          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+            <Sparkles className="h-3.5 w-3.5 text-white" />
           </div>
-          <div className="flex flex-col">
-            <span>AI Event Assistant</span>
-            {handsFreeMode && (
-              <span className="text-[10px] text-success font-normal">
-                {isListening ? "Listening..." : isSpeaking ? "Speaking..." : "Ready"}
-              </span>
-            )}
-          </div>
+          AI Assistant
+          {handsFreeMode && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 animate-pulse">
+              Hands-free
+            </Badge>
+          )}
         </CardTitle>
         <div className="flex items-center gap-1">
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => {
-                clearMessages();
-                setCreatedEvents(new Set());
-              }}
-              title="Clear conversation"
-            >
-              <Trash2 className="h-4 w-4 text-muted-foreground" />
-            </Button>
-          )}
           {ttsSupported && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-7 w-7"
               onClick={() => {
-                if (isSpeaking) stop();
                 setVoiceEnabled(!voiceEnabled);
+                if (voiceEnabled) stop();
               }}
-              title={voiceEnabled ? "Disable voice output" : "Enable voice output"}
+              title={voiceEnabled ? "Mute voice responses" : "Enable voice responses"}
             >
-              {voiceEnabled ? (
-                <Volume2 className={cn("h-4 w-4", isSpeaking && "text-primary animate-pulse")} />
-              ) : (
-                <VolumeX className="h-4 w-4 text-muted-foreground" />
-              )}
+              {voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
-            <X className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive hover:text-destructive"
+            onClick={clearMessages}
+            title="Clear conversation"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="h-3.5 w-3.5" />
           </Button>
         </div>
       </CardHeader>
-      
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-4">
+
+      <ScrollArea className="flex-1 px-4 min-h-0" ref={scrollRef as any}>
+        <div className="space-y-3 pb-2">
           {messages.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-sm font-medium mb-2">Hi! I'm your AI Event Assistant</p>
-              <p className="text-xs mb-3">Try saying:</p>
-              <div className="mt-3 space-y-2">
-                {randomSuggestions.map((suggestion, index) => (
-                  <button
-                    key={`${suggestion.text}-${suggestionSeed}-${index}`}
-                    className="block w-full text-left text-xs bg-secondary/50 hover:bg-secondary px-3 py-2 rounded-lg transition-colors"
-                    onClick={() => sendMessage(suggestion.text)}
+            <div className="space-y-2 py-4">
+              <p className="text-xs text-muted-foreground text-center mb-3">Try asking:</p>
+              {randomSuggestions.map((suggestion, i) => (
+                <button
+                  key={i}
+                  onClick={() => setInput(suggestion.text)}
+                  className="w-full text-left px-3 py-2 rounded-lg bg-secondary hover:bg-secondary/80 text-xs transition-colors"
+                >
+                  {suggestion.text}
+                </button>
+              ))}
+
+              {handsFreeMode && (
+                <div className="mt-4 text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 w-full gap-2"
+                    onClick={() => onOpenChange(false)}
                   >
-                    "{suggestion.text}"
-                  </button>
-                ))}
-              </div>
-              
-              {/* Hands-free mode info */}
-              {speechSupported && (
-                <div className="mt-6 p-3 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-xs font-medium text-primary mb-1">🎤 Hands-Free Mode</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    Click the radio button below to enable continuous voice conversation
-                  </p>
+                    <LogOut className="h-3 w-3" />
+                    Exit Assistant
+                  </Button>
                 </div>
               )}
-              
-              {/* Exit button */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4 w-full gap-2"
-                onClick={() => onOpenChange(false)}
-              >
-                <LogOut className="h-3 w-3" />
-                Exit Assistant
-              </Button>
             </div>
           )}
 
@@ -507,47 +456,25 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
                     return part;
                   })}
                 </div>
-                
-                {/* Create Event Button */}
-                {message.parsedEvent && (() => {
-                  const eventKey = `${message.parsedEvent.title}-${message.parsedEvent.date}-${message.parsedEvent.time}`;
-                  const isCreated = createdEvents.has(eventKey);
-                  
-                  return isCreated ? (
-                    <div className="mt-3 w-full flex items-center justify-center gap-2 py-2 px-4 rounded-md bg-success/10 text-success text-sm font-medium">
-                      <Check className="h-4 w-4" />
-                      Event Created!
-                    </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="mt-3 w-full gap-2"
-                      onClick={() => handleCreateEvent(message.parsedEvent!)}
-                      disabled={creatingEvent}
-                    >
-                      {creatingEvent ? (
-                        <>
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-3 w-3" />
-                          Create Event
-                        </>
-                      )}
-                    </Button>
-                  );
-                })()}
 
-                {/* Search Results Quick View */}
+                {message.parsedEvent && (
+                  <Button
+                    size="sm"
+                    className="mt-3 w-full gap-2"
+                    onClick={() => handleCreateEvent(message.parsedEvent!)}
+                    disabled={creatingEvent}
+                  >
+                    {creatingEvent
+                      ? <><Loader2 className="h-3 w-3 animate-spin" />Creating...</>
+                      : <><Check className="h-3 w-3" />Create Event</>
+                    }
+                  </Button>
+                )}
+
                 {message.searchResults && message.searchResults.length > 0 && (
                   <div className="mt-3 space-y-2">
                     {message.searchResults.slice(0, 3).map((result) => (
-                      <div
-                        key={result.id}
-                        className="flex items-center gap-2 p-2 rounded-lg bg-background/50 text-xs"
-                      >
+                      <div key={result.id} className="flex items-center gap-2 p-2 rounded-lg bg-background/50 text-xs">
                         <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
                         <div className="min-w-0">
                           <p className="font-medium truncate">{result.title}</p>
@@ -560,7 +487,6 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
                   </div>
                 )}
 
-                {/* Time Suggestions with Quick Create */}
                 {message.timeSuggestions && message.timeSuggestions.length > 0 && (
                   <div className="mt-3 space-y-2">
                     {message.timeSuggestions.map((suggestion, i) => (
@@ -603,7 +529,6 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
       </ScrollArea>
 
       <CardContent className="p-3 border-t shrink-0">
-        {/* Hands-free mode indicator */}
         {handsFreeMode && (
           <div className="flex items-center justify-center gap-2 mb-2 py-2 px-3 rounded-lg bg-success/10 border border-success/20">
             <div className={cn(
@@ -611,11 +536,11 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
               isListening ? "bg-success animate-pulse" : isSpeaking ? "bg-primary animate-pulse" : "bg-muted-foreground"
             )} />
             <span className="text-xs font-medium">
-              {isListening ? "Listening for your command..." : isSpeaking ? "Speaking response..." : isLoading ? "Processing..." : "Waiting..."}
+              {isListening ? "Listening..." : isSpeaking ? "Speaking..." : isLoading ? "Processing..." : "Waiting..."}
             </span>
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             ref={inputRef}
@@ -625,8 +550,7 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
             className="flex-1"
             disabled={isLoading || handsFreeMode}
           />
-          
-          {/* Hands-free toggle button */}
+
           {speechSupported && (
             <Button
               type="button"
@@ -634,16 +558,13 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
               variant={handsFreeMode ? "default" : "outline"}
               onClick={toggleHandsFreeMode}
               disabled={isLoading}
-              className={cn(
-                handsFreeMode && "bg-success hover:bg-success/90"
-              )}
+              className={cn(handsFreeMode && "bg-success hover:bg-success/90")}
               title={handsFreeMode ? "Disable hands-free mode" : "Enable hands-free mode"}
             >
               <Radio className={cn("h-4 w-4", handsFreeMode && "animate-pulse")} />
             </Button>
           )}
-          
-          {/* Manual mic button (hidden in hands-free mode) */}
+
           {speechSupported && !handsFreeMode && (
             <Button
               type="button"
@@ -657,13 +578,9 @@ export function AIEventAssistant({ open, onOpenChange }: AIEventAssistantProps) 
               {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
           )}
-          
+
           <Button type="submit" size="icon" disabled={isLoading || !input.trim() || handsFreeMode}>
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
       </CardContent>
