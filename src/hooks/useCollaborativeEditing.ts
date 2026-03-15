@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { RealtimeChannel } from "@supabase/supabase-js";
 
+// FIX: was "oderId" (typo) throughout — renamed to "userId"
 interface PresenceState {
-  oderId: string;
+  userId: string;
   userName: string;
   isTyping: boolean;
   lastTyped: string;
@@ -42,12 +43,12 @@ export function useCollaborativeEditing({
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
         const editors: PresenceState[] = [];
-        
+
         Object.entries(state).forEach(([key, presences]) => {
           if (key !== user.id && Array.isArray(presences)) {
             presences.forEach((presence: any) => {
               editors.push({
-                oderId: key,
+                userId: key,           // FIX: was oderId
                 userName: presence.userName || "Someone",
                 isTyping: presence.isTyping || false,
                 lastTyped: presence.lastTyped || "",
@@ -55,7 +56,7 @@ export function useCollaborativeEditing({
             });
           }
         });
-        
+
         setActiveEditors(editors);
       })
       .on("broadcast", { event: "content-update" }, ({ payload }) => {
@@ -66,7 +67,7 @@ export function useCollaborativeEditing({
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           await channel.track({
-            oderId: user.id,
+            userId: user.id,           // FIX: was oderId
             userName: user.email?.split("@")[0] || "User",
             isTyping: false,
             lastTyped: new Date().toISOString(),
@@ -110,7 +111,7 @@ export function useCollaborativeEditing({
       setIsTyping(typing);
 
       await channelRef.current.track({
-        oderId: user.id,
+        userId: user.id,               // FIX: was oderId
         userName: user.email?.split("@")[0] || "User",
         isTyping: typing,
         lastTyped: new Date().toISOString(),
