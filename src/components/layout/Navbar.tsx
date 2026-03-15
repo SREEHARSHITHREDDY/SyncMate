@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Calendar, Users, Bell, Plus, LayoutDashboard, LogIn, LogOut, Menu, X, Settings, FileText, User, ListTodo } from "lucide-react";
+import { Calendar, Users, Bell, Plus, LayoutDashboard, LogIn, LogOut, Menu, X, Settings, FileText, User, ListTodo, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -16,6 +16,7 @@ import { useState } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/find-time", label: "Find Time", icon: Zap },   // NEW — the core feature
   { href: "/my-tasks", label: "My Tasks", icon: ListTodo },
   { href: "/friends", label: "Friends", icon: Users },
   { href: "/calendar", label: "Calendar", icon: Calendar },
@@ -159,8 +160,8 @@ export function Navbar() {
                       onClick={() => setMobileMenuOpen(false)}
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-                        isActive 
-                          ? "bg-primary/10 text-primary" 
+                        isActive
+                          ? "bg-primary/10 text-primary"
                           : "text-muted-foreground hover:bg-secondary"
                       )}
                     >
