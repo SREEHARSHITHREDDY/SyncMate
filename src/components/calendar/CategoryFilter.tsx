@@ -5,9 +5,14 @@ import { Check } from "lucide-react";
 interface CategoryFilterProps {
   selectedCategories: CategoryType[];
   onCategoryToggle: (category: CategoryType) => void;
+  // FIX: added onClearAll prop.
+  // Old "All" button called selectedCategories.forEach(onCategoryToggle) which
+  // collapses React state updates — only the last category was ever removed.
+  // Now the parent passes a direct setState([]) call so it works correctly.
+  onClearAll: () => void;
 }
 
-export function CategoryFilter({ selectedCategories, onCategoryToggle }: CategoryFilterProps) {
+export function CategoryFilter({ selectedCategories, onCategoryToggle, onClearAll }: CategoryFilterProps) {
   const allSelected = selectedCategories.length === 0;
 
   return (
@@ -15,10 +20,7 @@ export function CategoryFilter({ selectedCategories, onCategoryToggle }: Categor
       <Button
         variant={allSelected ? "default" : "outline"}
         size="sm"
-        onClick={() => {
-          // Clear all filters (show all)
-          selectedCategories.forEach(cat => onCategoryToggle(cat));
-        }}
+        onClick={onClearAll}
         className="text-xs"
       >
         All
