@@ -1,15 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Filter, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Filter } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
-import { useCalendarPermissions } from "@/hooks/useCalendarPermissions";
-import { useFriendCalendar } from "@/hooks/useFriendCalendar";
-import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, addYears, subYears, parseISO, isAfter, isBefore } from "date-fns";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CalendarRange, Clock, Info } from "lucide-react";
+import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, addYears, subYears } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,13 +24,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface EventException {
   id: string;
@@ -48,91 +37,59 @@ export default function CalendarPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { events } = useEvents();
-  const { accessibleCalendars } = useCalendarPermissions();
-  
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [selectedEvent, setSelectedEvent] = useState<(EventWithResponse & { isCancelled?: boolean }) | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<CategoryType[]>([]);
-  const [viewingCalendar, setViewingCalendar] = useState<string>("my"); // "my" or friend's user_id
-  
+
   // Quick event dialog state
   const [quickEventOpen, setQuickEventOpen] = useState(false);
   const [quickEventDate, setQuickEventDate] = useState<Date>();
   const [quickEventTime, setQuickEventTime] = useState<string>();
-  
+
   // Edit event dialog state
   const [editEventOpen, setEditEventOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<EventWithResponse | null>(null);
-
-  // Fetch friend's calendar if viewing
-  const friendId = viewingCalendar !== "my" ? viewingCalendar : null;
-  const { events: friendEvents, exceptions: friendExceptions, permission: friendPermission } = useFriendCalendar(friendId);
-
-  // Check if viewing a restricted calendar
-  const viewRestrictions = useMemo(() => {
-    if (!friendPermission) return null;
-    
-    const hasViewFromDate = !!friendPermission.view_from_date;
-    const hasExpiresAt = !!friendPermission.expires_at;
-    
-    if (!hasViewFromDate && !hasExpiresAt) return null;
-    
-    return {
-      viewFromDate: friendPermission.view_from_date,
-      expiresAt: friendPermission.expires_at,
-    };
-  }, [friendPermission]);
 
   // Fetch all exceptions for the user's events
   const { data: allExceptions = [] } = useQuery({
     queryKey: ["all-event-exceptions", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      
+
       const eventIds = events.map(e => e.id);
       if (eventIds.length === 0) return [];
-      
+
       const { data, error } = await supabase
         .from("event_exceptions")
         .select("*")
         .in("event_id", eventIds);
-      
+
       if (error) throw error;
       return data as EventException[];
     },
     enabled: !!user && events.length > 0,
+    staleTime: 1000 * 60 * 2,
   });
 
   // Add cancellation status to events and filter by category
   const eventsWithStatus = useMemo(() => {
-    // Use friend's events if viewing friend's calendar, otherwise own events
-    const activeEvents = viewingCalendar === "my" ? events : friendEvents;
-    const activeExceptions = viewingCalendar === "my" ? allExceptions : friendExceptions;
-    
-    let filtered = activeEvents.map((event) => {
-      const isCancelled = activeExceptions.some(
-        (ex: EventException) => ex.event_id === event.id && ex.exception_date === event.event_date
+    let filtered = events.map((event) => {
+      const isCancelled = allExceptions.some(
+        ex => ex.event_id === event.id && ex.exception_date === event.event_date
       );
       return { ...event, isCancelled };
     });
 
     // Filter by category if any selected
     if (selectedCategories.length > 0) {
-      filtered = filtered.filter(event => 
+      filtered = filtered.filter(event =>
         selectedCategories.includes(((event as any).category || "default") as CategoryType)
       );
     }
 
     return filtered;
-  }, [events, friendEvents, allExceptions, friendExceptions, selectedCategories, viewingCalendar]);
-
-  // Get the name of the currently viewed calendar
-  const viewingCalendarName = useMemo(() => {
-    if (viewingCalendar === "my") return "My Calendar";
-    const friend = accessibleCalendars.find(c => c.owner_id === viewingCalendar);
-    return friend?.profile?.name ? `${friend.profile.name}'s Calendar` : "Friend's Calendar";
-  }, [viewingCalendar, accessibleCalendars]);
+  }, [events, allExceptions, selectedCategories]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -142,35 +99,19 @@ export default function CalendarPage() {
 
   const goToPrev = () => {
     switch (viewMode) {
-      case "day":
-        setSelectedDate(subDays(selectedDate, 1));
-        break;
-      case "week":
-        setSelectedDate(subWeeks(selectedDate, 1));
-        break;
-      case "month":
-        setSelectedDate(subMonths(selectedDate, 1));
-        break;
-      case "year":
-        setSelectedDate(subYears(selectedDate, 1));
-        break;
+      case "day": setSelectedDate(subDays(selectedDate, 1)); break;
+      case "week": setSelectedDate(subWeeks(selectedDate, 1)); break;
+      case "month": setSelectedDate(subMonths(selectedDate, 1)); break;
+      case "year": setSelectedDate(subYears(selectedDate, 1)); break;
     }
   };
 
   const goToNext = () => {
     switch (viewMode) {
-      case "day":
-        setSelectedDate(addDays(selectedDate, 1));
-        break;
-      case "week":
-        setSelectedDate(addWeeks(selectedDate, 1));
-        break;
-      case "month":
-        setSelectedDate(addMonths(selectedDate, 1));
-        break;
-      case "year":
-        setSelectedDate(addYears(selectedDate, 1));
-        break;
+      case "day": setSelectedDate(addDays(selectedDate, 1)); break;
+      case "week": setSelectedDate(addWeeks(selectedDate, 1)); break;
+      case "month": setSelectedDate(addMonths(selectedDate, 1)); break;
+      case "year": setSelectedDate(addYears(selectedDate, 1)); break;
     }
   };
 
@@ -178,14 +119,10 @@ export default function CalendarPage() {
 
   const getHeaderTitle = () => {
     switch (viewMode) {
-      case "day":
-        return format(selectedDate, "d MMMM yyyy");
-      case "week":
-        return format(selectedDate, "MMMM yyyy");
-      case "month":
-        return format(selectedDate, "MMMM yyyy");
-      case "year":
-        return format(selectedDate, "yyyy");
+      case "day": return format(selectedDate, "d MMMM yyyy");
+      case "week": return format(selectedDate, "MMMM yyyy");
+      case "month": return format(selectedDate, "MMMM yyyy");
+      case "year": return format(selectedDate, "yyyy");
     }
   };
 
@@ -204,12 +141,14 @@ export default function CalendarPage() {
   const handleEventClick = (event: EventWithResponse) => {
     const eventWithStatus = eventsWithStatus.find(e => e.id === event.id);
     setSelectedEvent(eventWithStatus || { ...event, isCancelled: false });
-    
-    // Open edit dialog if user is the creator
+
+    // FIX: old code only showed edit dialog for creators — non-creators saw nothing.
+    // Now: show event details in sidebar for everyone; only open edit dialog for creators.
     if (event.isCreator) {
       setEventToEdit(event);
       setEditEventOpen(true);
     }
+    // Non-creator clicks: selectedEvent is set above so sidebar shows the details.
   };
 
   const handleTimeSlotClick = (date: Date, time: string) => {
@@ -219,7 +158,7 @@ export default function CalendarPage() {
   };
 
   const handleCategoryToggle = (category: CategoryType) => {
-    setSelectedCategories(prev => 
+    setSelectedCategories(prev =>
       prev.includes(category)
         ? prev.filter(c => c !== category)
         : [...prev, category]
@@ -255,23 +194,6 @@ export default function CalendarPage() {
 
             {/* Right side - Actions */}
             <div className="flex items-center gap-2">
-              {/* Calendar Selector (only show if user has access to other calendars) */}
-              {accessibleCalendars.length > 0 && (
-                <Select value={viewingCalendar} onValueChange={setViewingCalendar}>
-                  <SelectTrigger className="w-[180px] h-9">
-                    <Users className="h-4 w-4 mr-2" />
-                    <SelectValue>{viewingCalendarName}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="my">My Calendar</SelectItem>
-                    {accessibleCalendars.map((cal) => (
-                      <SelectItem key={cal.id} value={cal.owner_id}>
-                        {cal.profile?.name || "Friend"}'s Calendar
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
               {/* Category Filter */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -288,9 +210,11 @@ export default function CalendarPage() {
                 <PopoverContent className="w-auto" align="end">
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Filter by Category</p>
-                    <CategoryFilter 
+                    {/* FIX: pass onClearAll so the "All" button actually clears all filters */}
+                    <CategoryFilter
                       selectedCategories={selectedCategories}
                       onCategoryToggle={handleCategoryToggle}
+                      onClearAll={() => setSelectedCategories([])}
                     />
                   </div>
                 </PopoverContent>
@@ -299,44 +223,18 @@ export default function CalendarPage() {
               <Button variant="outline" size="sm" onClick={goToToday}>
                 Today
               </Button>
-              
-              {viewingCalendar === "my" && (
-                <Button size="sm" className="gap-2" onClick={() => {
-                  setQuickEventDate(selectedDate);
-                  setQuickEventTime("09:00");
-                  setQuickEventOpen(true);
-                }}>
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">Create Event</span>
-                </Button>
-              )}
+
+              <Button size="sm" className="gap-2" onClick={() => {
+                setQuickEventDate(selectedDate);
+                setQuickEventTime("09:00");
+                setQuickEventOpen(true);
+              }}>
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Create Event</span>
+              </Button>
             </div>
           </div>
         </div>
-
-        {/* View Restriction Banner */}
-        {viewingCalendar !== "my" && viewRestrictions && (
-          <div className="flex-shrink-0 px-4 pt-3">
-            <Alert className="bg-muted/50 border-primary/20">
-              <Info className="h-4 w-4" />
-              <AlertDescription className="flex items-center gap-4 flex-wrap">
-                <span className="font-medium">Restricted View:</span>
-                {viewRestrictions.viewFromDate && (
-                  <span className="flex items-center gap-1.5 text-sm">
-                    <CalendarRange className="h-3.5 w-3.5" />
-                    Events from {format(parseISO(viewRestrictions.viewFromDate), "MMM d, yyyy")}
-                  </span>
-                )}
-                {viewRestrictions.expiresAt && (
-                  <span className="flex items-center gap-1.5 text-sm">
-                    <Clock className="h-3.5 w-3.5" />
-                    Access expires {format(parseISO(viewRestrictions.expiresAt), "MMM d, yyyy")}
-                  </span>
-                )}
-              </AlertDescription>
-            </Alert>
-          </div>
-        )}
 
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
@@ -392,14 +290,14 @@ export default function CalendarPage() {
               />
             </div>
 
-            {/* Selected Event Details */}
+            {/* Selected Event Details — shown for ALL users now, not just creators */}
             {selectedEvent && (
               <div className="border-t border-border pt-4">
                 <EventDetailsSidebar event={selectedEvent} />
                 {selectedEvent.isCreator && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="w-full mt-4"
                     onClick={() => {
                       setEventToEdit(selectedEvent);
