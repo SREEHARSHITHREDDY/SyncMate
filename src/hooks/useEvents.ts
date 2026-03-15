@@ -14,6 +14,10 @@ export interface Event {
   recurrence_end_date: string | null;
   created_at: string;
   is_completed: boolean;
+  // FIX: category was missing from the interface even though it exists in the
+  // database (confirmed in types.ts). Every component was doing (event as any).category
+  // as a workaround. Adding it here removes all those unsafe casts.
+  category: string | null;
 }
 
 export interface EventWithResponse extends Event {
@@ -24,7 +28,7 @@ export interface EventWithResponse extends Event {
 export function useEvents() {
   const { user } = useAuth();
 
-  // Get upcoming events (created by user or invited to)
+  // Get events created by user or invited to
   const eventsQuery = useQuery({
     queryKey: ["events", user?.id],
     queryFn: async () => {
@@ -32,7 +36,7 @@ export function useEvents() {
 
       const today = new Date().toISOString().split("T")[0];
 
-      // Get events created by user
+      // Get events created by user (future + today only for dashboard/list views)
       const { data: createdEvents, error: createdError } = await supabase
         .from("events")
         .select("*")
@@ -42,7 +46,7 @@ export function useEvents() {
 
       if (createdError) throw createdError;
 
-      // Get event invitations
+      // Get event invitations (joined events)
       const { data: responses, error: responsesError } = await supabase
         .from("event_responses")
         .select("*, events(*)")
@@ -64,19 +68,25 @@ export function useEvents() {
         response: "yes" as const,
       })) as EventWithResponse[];
 
-      // Combine and sort
-      const allEvents = [...createdWithFlag, ...(invitedEvents || [])];
+      // Combine and deduplicate (in case user is also in event_responses for their own event)
+      const allEvents = [...createdWithFlag];
+      for (const invited of (invitedEvents || [])) {
+        if (!allEvents.some(e => e.id === invited.id)) {
+          allEvents.push(invited);
+        }
+      }
+
       allEvents.sort(
-        (a, b) =>
-          new Date(a.event_date).getTime() - new Date(b.event_date).getTime()
+        (a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime()
       );
 
       return allEvents;
     },
     enabled: !!user,
+    staleTime: 1000 * 60 * 2, // 2 minutes — avoids refetch on every navigation
   });
 
-  // Get pending event invitations
+  // Get pending event invitations (for the invitations card on dashboard)
   const pendingInvitesQuery = useQuery({
     queryKey: ["event-invites", user?.id],
     queryFn: async () => {
@@ -99,6 +109,7 @@ export function useEvents() {
         }));
     },
     enabled: !!user,
+    staleTime: 1000 * 60 * 2,
   });
 
   return {
