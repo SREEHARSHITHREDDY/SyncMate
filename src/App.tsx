@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RealtimeProvider } from "@/components/RealtimeProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -17,10 +19,18 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Templates from "./pages/Templates";
 import MyTasks from "./pages/MyTasks";
-import EventDetail from "./pages/EventDetail";
+import AvailabilityFinder from "./pages/AvailabilityFinder";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Global staleTime: queries won't refetch more than once every 2 minutes
+      // when navigating between pages. Overridden per-query where needed.
+      staleTime: 1000 * 60 * 2,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -32,18 +42,27 @@ const App = () => (
           <AuthProvider>
             <RealtimeProvider>
               <Routes>
+                {/* Public routes */}
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/friends" element={<Friends />} />
-                <Route path="/create-event" element={<CreateEvent />} />
-                <Route path="/calendar" element={<CalendarPage />} />
-                <Route path="/notifications" element={<Notifications />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/templates" element={<Templates />} />
-                <Route path="/my-tasks" element={<MyTasks />} />
-                <Route path="/event/:eventId" element={<EventDetail />} />
+
+                {/* Protected routes — wrapped with ProtectedRoute so there is
+                    no flash of protected content before the auth redirect fires.
+                    Previously every page did its own useEffect redirect which
+                    runs after first render, showing a brief flash. */}
+                <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/friends" element={<ProtectedRoute><Friends /></ProtectedRoute>} />
+                <Route path="/create-event" element={<ProtectedRoute><CreateEvent /></ProtectedRoute>} />
+                <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
+                <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
+                <Route path="/my-tasks" element={<ProtectedRoute><MyTasks /></ProtectedRoute>} />
+
+                {/* NEW: Shared availability finder — the core SyncMates differentiator */}
+                <Route path="/find-time" element={<ProtectedRoute><AvailabilityFinder /></ProtectedRoute>} />
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </RealtimeProvider>
