@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,14 @@ export default function Profile() {
   const [hasChanges, setHasChanges] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize name when profile loads
-  useState(() => {
+  // FIX: was useState(() => {...}) which silently does nothing.
+  // useEffect with profile.name in deps correctly initialises the field
+  // once the profile loads from the server.
+  useEffect(() => {
     if (profile?.name && !hasChanges) {
       setName(profile.name);
     }
-  });
+  }, [profile?.name]);
 
   const handleNameChange = (value: string) => {
     setName(value);
@@ -39,7 +41,6 @@ export default function Profile() {
     if (file) {
       await uploadAvatar(file);
     }
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -169,7 +170,7 @@ export default function Profile() {
                 <Label htmlFor="name">Display Name</Label>
                 <Input
                   id="name"
-                  value={name || profile?.name || ""}
+                  value={name}
                   onChange={(e) => handleNameChange(e.target.value)}
                   placeholder="Enter your name"
                 />
