@@ -9,14 +9,13 @@ export interface Event {
   description: string | null;
   event_date: string;
   event_time: string;
+  end_time: string | null;       // NEW: optional end time
+  color: string | null;          // NEW: optional custom hex color
   priority: "low" | "medium" | "high";
   recurrence_type: string | null;
   recurrence_end_date: string | null;
   created_at: string;
   is_completed: boolean;
-  // FIX: category was missing from the interface even though it exists in the
-  // database (confirmed in types.ts). Every component was doing (event as any).category
-  // as a workaround. Adding it here removes all those unsafe casts.
   category: string | null;
 }
 
@@ -28,7 +27,6 @@ export interface EventWithResponse extends Event {
 export function useEvents() {
   const { user } = useAuth();
 
-  // Get events created by user or invited to
   const eventsQuery = useQuery({
     queryKey: ["events", user?.id],
     queryFn: async () => {
@@ -36,17 +34,16 @@ export function useEvents() {
 
       const today = new Date().toISOString().split("T")[0];
 
-      // Get events created by user (future + today only for dashboard/list views)
+      // Get ALL events created by user (no date filter — calendar needs past events too)
       const { data: createdEvents, error: createdError } = await supabase
         .from("events")
         .select("*")
         .eq("creator_id", user.id)
-        .gte("event_date", today)
         .order("event_date", { ascending: true });
 
       if (createdError) throw createdError;
 
-      // Get event invitations (joined events)
+      // Get event invitations
       const { data: responses, error: responsesError } = await supabase
         .from("event_responses")
         .select("*, events(*)")
@@ -55,7 +52,7 @@ export function useEvents() {
       if (responsesError) throw responsesError;
 
       const invitedEvents = responses
-        ?.filter((r) => r.events && r.events.event_date >= today)
+        ?.filter((r) => r.events)
         .map((r) => ({
           ...r.events,
           response: r.response,
@@ -68,7 +65,7 @@ export function useEvents() {
         response: "yes" as const,
       })) as EventWithResponse[];
 
-      // Combine and deduplicate (in case user is also in event_responses for their own event)
+      // Combine and deduplicate
       const allEvents = [...createdWithFlag];
       for (const invited of (invitedEvents || [])) {
         if (!allEvents.some(e => e.id === invited.id)) {
@@ -83,10 +80,15 @@ export function useEvents() {
       return allEvents;
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 2, // 2 minutes — avoids refetch on every navigation
+    staleTime: 1000 * 60 * 2,
   });
 
-  // Get pending event invitations (for the invitations card on dashboard)
+  // Upcoming events only (today onwards) — for dashboard and invites
+  const today = new Date().toISOString().split("T")[0];
+  const upcomingEvents = (eventsQuery.data || []).filter(
+    e => e.event_date >= today
+  );
+
   const pendingInvitesQuery = useQuery({
     queryKey: ["event-invites", user?.id],
     queryFn: async () => {
@@ -113,7 +115,8 @@ export function useEvents() {
   });
 
   return {
-    events: eventsQuery.data || [],
+    events: eventsQuery.data || [],         // ALL events (past + future) for calendar
+    upcomingEvents,                          // future only — for dashboard
     eventsLoading: eventsQuery.isLoading,
     pendingInvites: pendingInvitesQuery.data || [],
     pendingInvitesLoading: pendingInvitesQuery.isLoading,
