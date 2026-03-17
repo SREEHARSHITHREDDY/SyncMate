@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Filter } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Filter, Calendar, CheckSquare, Bell, ChevronDown } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
@@ -18,12 +18,19 @@ import { EventDetailsSidebar } from "@/components/calendar/EventDetailsSidebar";
 import { CategoryFilter } from "@/components/calendar/CategoryFilter";
 import { QuickEventDialog } from "@/components/calendar/QuickEventDialog";
 import { EditEventDialog } from "@/components/EditEventDialog";
+import { CreateTaskDialog } from "@/components/CreateTaskDialog";
 import { CategoryType } from "@/lib/eventCategories";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface EventException {
   id: string;
@@ -42,29 +49,29 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<(EventWithResponse & { isCancelled?: boolean }) | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<CategoryType[]>([]);
 
-  // Quick event dialog state
+  // Quick event dialog
   const [quickEventOpen, setQuickEventOpen] = useState(false);
   const [quickEventDate, setQuickEventDate] = useState<Date>();
   const [quickEventTime, setQuickEventTime] = useState<string>();
 
-  // Edit event dialog state
+  // Edit event dialog
   const [editEventOpen, setEditEventOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<EventWithResponse | null>(null);
 
-  // Fetch all exceptions for the user's events
+  // Create task/reminder dialog
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [taskDialogType, setTaskDialogType] = useState<"task" | "reminder">("task");
+
   const { data: allExceptions = [] } = useQuery({
     queryKey: ["all-event-exceptions", user?.id],
     queryFn: async () => {
       if (!user) return [];
-
       const eventIds = events.map(e => e.id);
       if (eventIds.length === 0) return [];
-
       const { data, error } = await supabase
         .from("event_exceptions")
         .select("*")
         .in("event_id", eventIds);
-
       if (error) throw error;
       return data as EventException[];
     },
@@ -72,7 +79,6 @@ export default function CalendarPage() {
     staleTime: 1000 * 60 * 2,
   });
 
-  // Add cancellation status to events and filter by category
   const eventsWithStatus = useMemo(() => {
     let filtered = events.map((event) => {
       const isCancelled = allExceptions.some(
@@ -80,21 +86,16 @@ export default function CalendarPage() {
       );
       return { ...event, isCancelled };
     });
-
-    // Filter by category if any selected
     if (selectedCategories.length > 0) {
       filtered = filtered.filter(event =>
-        selectedCategories.includes(((event as any).category || "default") as CategoryType)
+        selectedCategories.includes(((event as any).category || "general") as CategoryType)
       );
     }
-
     return filtered;
   }, [events, allExceptions, selectedCategories]);
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate("/auth");
-    }
+    if (!loading && !user) navigate("/auth");
   }, [user, loading, navigate]);
 
   const goToPrev = () => {
@@ -128,9 +129,7 @@ export default function CalendarPage() {
 
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
-    if (viewMode === "month" || viewMode === "year") {
-      setViewMode("day");
-    }
+    if (viewMode === "month" || viewMode === "year") setViewMode("day");
   };
 
   const handleMonthClick = (date: Date) => {
@@ -141,14 +140,10 @@ export default function CalendarPage() {
   const handleEventClick = (event: EventWithResponse) => {
     const eventWithStatus = eventsWithStatus.find(e => e.id === event.id);
     setSelectedEvent(eventWithStatus || { ...event, isCancelled: false });
-
-    // FIX: old code only showed edit dialog for creators — non-creators saw nothing.
-    // Now: show event details in sidebar for everyone; only open edit dialog for creators.
     if (event.isCreator) {
       setEventToEdit(event);
       setEditEventOpen(true);
     }
-    // Non-creator clicks: selectedEvent is set above so sidebar shows the details.
   };
 
   const handleTimeSlotClick = (date: Date, time: string) => {
@@ -157,21 +152,18 @@ export default function CalendarPage() {
     setQuickEventOpen(true);
   };
 
-  const handleCategoryToggle = (category: CategoryType) => {
-    setSelectedCategories(prev =>
-      prev.includes(category)
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
-    );
+  const openCreateTask = (type: "task" | "reminder") => {
+    setTaskDialogType(type);
+    setTaskDialogOpen(true);
   };
 
   return (
     <AppLayout>
       <div className="h-[calc(100vh-4rem)] flex flex-col">
-        {/* Top Navigation Bar */}
+        {/* Top bar */}
         <div className="flex-shrink-0 border-b border-border bg-background px-4 py-3">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            {/* Left side - Navigation */}
+            {/* Left — navigation */}
             <div className="flex items-center gap-3">
               <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPrev}>
                 <ChevronLeft className="h-4 w-4" />
@@ -182,7 +174,7 @@ export default function CalendarPage() {
               <h1 className="text-xl font-semibold">{getHeaderTitle()}</h1>
             </div>
 
-            {/* Center - View Mode Tabs */}
+            {/* Center — view tabs */}
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
               <TabsList className="bg-secondary">
                 <TabsTrigger value="day" className="px-4">Day</TabsTrigger>
@@ -192,9 +184,9 @@ export default function CalendarPage() {
               </TabsList>
             </Tabs>
 
-            {/* Right side - Actions */}
+            {/* Right — actions */}
             <div className="flex items-center gap-2">
-              {/* Category Filter */}
+              {/* Category filter */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2">
@@ -210,10 +202,13 @@ export default function CalendarPage() {
                 <PopoverContent className="w-auto" align="end">
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Filter by Category</p>
-                    {/* FIX: pass onClearAll so the "All" button actually clears all filters */}
                     <CategoryFilter
                       selectedCategories={selectedCategories}
-                      onCategoryToggle={handleCategoryToggle}
+                      onCategoryToggle={(cat) =>
+                        setSelectedCategories(prev =>
+                          prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+                        )
+                      }
                       onClearAll={() => setSelectedCategories([])}
                     />
                   </div>
@@ -224,21 +219,49 @@ export default function CalendarPage() {
                 Today
               </Button>
 
-              <Button size="sm" className="gap-2" onClick={() => {
-                setQuickEventDate(selectedDate);
-                setQuickEventTime("09:00");
-                setQuickEventOpen(true);
-              }}>
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Create Event</span>
-              </Button>
+              {/* ── CREATE DROPDOWN ── */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="gap-1.5">
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Create</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setQuickEventDate(selectedDate);
+                      setQuickEventTime("09:00");
+                      setQuickEventOpen(true);
+                    }}
+                    className="gap-2"
+                  >
+                    <Calendar className="h-4 w-4 text-primary" />
+                    Event
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => openCreateTask("task")}
+                    className="gap-2"
+                  >
+                    <CheckSquare className="h-4 w-4 text-amber-500" />
+                    Task
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => openCreateTask("reminder")}
+                    className="gap-2"
+                  >
+                    <Bell className="h-4 w-4 text-violet-500" />
+                    Reminder
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
 
-        {/* Main Content */}
+        {/* Main content */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Calendar View */}
           <div className="flex-1 overflow-auto p-4">
             {viewMode === "day" && (
               <CalendarDayView
@@ -274,23 +297,18 @@ export default function CalendarPage() {
             )}
           </div>
 
-          {/* Right Sidebar */}
+          {/* Right sidebar */}
           <div className="w-72 border-l border-border p-4 flex-shrink-0 overflow-auto hidden lg:block">
-            {/* Mini Month Calendar */}
             <div className="mb-6">
               <CalendarMiniMonth
                 selectedDate={selectedDate}
                 onDateClick={(date) => {
                   setSelectedDate(date);
-                  if (viewMode === "year") {
-                    setViewMode("day");
-                  }
+                  if (viewMode === "year") setViewMode("day");
                 }}
                 onMonthChange={setSelectedDate}
               />
             </div>
-
-            {/* Selected Event Details — shown for ALL users now, not just creators */}
             {selectedEvent && (
               <div className="border-t border-border pt-4">
                 <EventDetailsSidebar event={selectedEvent} />
@@ -313,19 +331,23 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Quick Event Dialog */}
+      {/* Dialogs */}
       <QuickEventDialog
         open={quickEventOpen}
         onOpenChange={setQuickEventOpen}
         initialDate={quickEventDate}
         initialTime={quickEventTime}
       />
-
-      {/* Edit Event Dialog */}
       <EditEventDialog
         event={eventToEdit}
         open={editEventOpen}
         onOpenChange={setEditEventOpen}
+      />
+      <CreateTaskDialog
+        open={taskDialogOpen}
+        onOpenChange={setTaskDialogOpen}
+        defaultType={taskDialogType}
+        initialDate={selectedDate}
       />
     </AppLayout>
   );
