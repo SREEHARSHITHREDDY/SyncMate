@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Calendar, Users, Bell, Plus, LayoutDashboard, LogIn, LogOut, Menu, X, Settings, FileText, User, ListTodo, Zap } from "lucide-react";
+import { Calendar, Users, Bell, LayoutDashboard, LogIn, LogOut, Menu, X, Settings, FileText, User, ListTodo, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -16,7 +16,7 @@ import { useState } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/find-time", label: "Find Time", icon: Zap },   // NEW — the core feature
+  { href: "/find-time", label: "Find Time", icon: Zap },
   { href: "/my-tasks", label: "My Tasks", icon: ListTodo },
   { href: "/friends", label: "Friends", icon: Users },
   { href: "/calendar", label: "Calendar", icon: Calendar },
@@ -68,8 +68,10 @@ export function Navbar() {
                   key={item.href}
                   to={item.href}
                   className={cn(
-                    "nav-link flex items-center gap-2",
-                    isActive && "active"
+                    "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -80,48 +82,43 @@ export function Navbar() {
           </nav>
         ) : null}
 
-        {/* Desktop Actions */}
+        {/* Desktop Actions — Create Event button removed, only avatar menu remains */}
         <div className="hidden md:flex items-center gap-3">
           {isAuthenticated ? (
-            <>
-              <Link to="/create-event">
-                <Button size="sm" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">Create Event</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={profile?.avatar_url || undefined} alt={profile?.name} />
+                    <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                      {profile?.name ? getInitials(profile.name) : "U"}
+                    </AvatarFallback>
+                  </Avatar>
                 </Button>
-              </Link>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={profile?.avatar_url || undefined} alt={profile?.name} />
-                      <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                        {profile?.name ? getInitials(profile.name) : "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem asChild>
-                    <Link to="/profile" className="flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/settings" className="flex items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      Settings
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link to="/profile" className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/settings" className="flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleSignOut}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <Link to="/auth">
               <Button variant="default" size="sm" className="gap-2">
@@ -170,14 +167,6 @@ export function Navbar() {
                     </Link>
                   );
                 })}
-                <Link
-                  to="/create-event"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary text-primary-foreground"
-                >
-                  <Plus className="h-5 w-5" />
-                  Create Event
-                </Link>
                 <button
                   onClick={() => {
                     handleSignOut();
