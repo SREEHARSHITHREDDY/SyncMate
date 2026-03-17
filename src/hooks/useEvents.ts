@@ -51,16 +51,16 @@ export function useEvents() {
 
       if (responsesError) throw responsesError;
 
-      const invitedEvents = responses
-        ?.filter((r) => r.events)
+      const invitedEvents = (responses || [])
+        .filter((r) => r.events != null)
         .map((r) => ({
-          ...r.events,
-          response: r.response,
+          ...(r.events as unknown as Event),
+          response: r.response as EventWithResponse["response"],
           isCreator: false,
         })) as EventWithResponse[];
 
       const createdWithFlag = (createdEvents || []).map((e) => ({
-        ...e,
+        ...(e as unknown as Event),
         isCreator: true,
         response: "yes" as const,
       })) as EventWithResponse[];
@@ -103,9 +103,9 @@ export function useEvents() {
       if (error) throw error;
 
       return (data || [])
-        .filter((r) => r.events)
+        .filter((r) => r.events != null)
         .map((r) => ({
-          ...r.events,
+          ...(r.events as unknown as Event),
           responseId: r.id,
           response: r.response,
         }));
