@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { format, parseISO, isSameDay, startOfWeek, addDays, isToday } from "date-fns";
-import { EyeOff } from "lucide-react";
 import { EventWithResponse } from "@/hooks/useEvents";
-import { getCategoryColor } from "@/lib/eventCategories";
+import { getEventHex, getDurationLabel, getEventHeightPx } from "@/lib/eventCategories";
 
 interface CalendarWeekViewProps {
   selectedDate: Date;
@@ -29,11 +28,13 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
 
   const getEventPosition = (event: EventWithResponse) => {
     const [hours, minutes] = event.event_time.split(":").map(Number);
-    return { top: hours * 60 + minutes, height: 60 };
+    const top = hours * 60 + minutes;
+    const height = getEventHeightPx(event.event_time, event.end_time, 20);
+    return { top, height };
   };
 
   const handleTimeSlotClick = (day: Date, hour: number) => {
-    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+    const timeStr = `${hour.toString().padStart(2, "0")}:00`;
     onTimeSlotClick?.(day, timeStr);
   };
 
@@ -70,13 +71,13 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
               className="absolute left-0 right-0 flex"
               style={{ top: `${hour * 60}px`, height: "60px" }}
             >
-              <div className="w-16 text-xs text-muted-foreground pr-2 text-right -mt-2">
+              <div className="w-16 text-xs text-muted-foreground pr-2 text-right -mt-2 select-none">
                 {format(new Date().setHours(hour, 0), "h a")}
               </div>
               <div className="flex-1 flex border-t border-border/50">
                 {weekDays.map((day) => (
-                  <div 
-                    key={day.toISOString()} 
+                  <div
+                    key={day.toISOString()}
                     className="flex-1 border-r border-border/30 last:border-r-0 cursor-pointer hover:bg-primary/5 transition-colors"
                     onClick={() => handleTimeSlotClick(day, hour)}
                   />
@@ -85,8 +86,8 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
             </div>
           ))}
 
-          {/* Events */}
-          <div className="absolute left-16 right-0 flex">
+          {/* Event blocks */}
+          <div className="absolute left-16 right-0 flex top-0">
             {weekDays.map((day) => {
               const dayEvents = getEventsForDay(day);
               return (
@@ -94,9 +95,9 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
                   {dayEvents.map((event) => {
                     const { top, height } = getEventPosition(event);
                     const isInactive = event.isCancelled || event.is_completed;
-                    const categoryColor = getCategoryColor((event as any).category);
-                    const isPrivate = (event as any).is_private;
-                    
+                    const hex = getEventHex(event.category, event.color);
+                    const duration = getDurationLabel(event.event_time, event.end_time);
+
                     return (
                       <div
                         key={event.id}
@@ -104,13 +105,30 @@ export function CalendarWeekView({ selectedDate, events, onDateClick, onEventCli
                           e.stopPropagation();
                           onEventClick?.(event);
                         }}
-                        className={`absolute left-0.5 right-0.5 rounded px-1 py-0.5 cursor-pointer transition-opacity hover:opacity-80 ${categoryColor} ${isInactive ? "opacity-50" : ""}`}
-                        style={{ top: `${top}px`, minHeight: `${Math.max(height, 20)}px` }}
+                        className={`absolute left-0.5 right-0.5 rounded px-1 py-0.5 cursor-pointer transition-all hover:brightness-110 hover:shadow-sm select-none ${isInactive ? "opacity-50" : ""}`}
+                        style={{
+                          top: `${top}px`,
+                          height: `${height}px`,
+                          backgroundColor: hex + "dd",
+                          borderLeft: `3px solid ${hex}`,
+                        }}
                       >
-                        <div className={`text-white text-[10px] font-medium truncate flex items-center gap-0.5 ${isInactive ? "line-through" : ""}`}>
+                        <div className={`text-white text-[10px] font-semibold truncate ${isInactive ? "line-through" : ""}`}>
                           {event.title}
-                          {isPrivate && <EyeOff className="h-2.5 w-2.5 opacity-70 flex-shrink-0" />}
                         </div>
+                        {/* Show time range if block tall enough */}
+                        {height >= 36 && (
+                          <div className="text-white/80 text-[9px] truncate">
+                            {event.event_time.slice(0, 5)}
+                            {event.end_time && ` – ${event.end_time.slice(0, 5)}`}
+                          </div>
+                        )}
+                        {/* Duration badge if tall enough */}
+                        {height >= 52 && (
+                          <div className="inline-flex items-center mt-0.5 px-1 py-0 rounded bg-white/20 text-white text-[9px] font-medium">
+                            {duration}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
