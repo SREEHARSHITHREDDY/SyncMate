@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { Calendar, ArrowRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
@@ -16,7 +16,11 @@ const loginSchema = z.object({
 });
 
 const signupSchema = loginSchema.extend({
-  name: z.string().trim().min(1, { message: "Name is required" }).max(100, { message: "Name must be less than 100 characters" }),
+  name: z
+    .string()
+    .trim()
+    .min(1, { message: "Name is required" })
+    .max(100, { message: "Name must be less than 100 characters" }),
 });
 
 export default function Auth() {
@@ -25,26 +29,32 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{
+    name?: string;
+    email?: string;
+    password?: string;
+  }>({});
 
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
+  // FIX 5: read the intended destination that ProtectedRoute saved in location.state
+  const location = useLocation();
   const { toast } = useToast();
 
-  // Redirect if already authenticated
+  // FIX 5: redirect to the page they were trying to visit, not always /dashboard
+  const from = (location.state as any)?.from?.pathname || "/dashboard";
+
   useEffect(() => {
     if (!loading && user) {
-      navigate("/dashboard");
+      navigate(from, { replace: true });
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, from]);
 
   const validateForm = () => {
     setErrors({});
     const schema = isLogin ? loginSchema : signupSchema;
     const data = isLogin ? { email, password } : { name, email, password };
-    
     const result = schema.safeParse(data);
-    
     if (!result.success) {
       const fieldErrors: { name?: string; email?: string; password?: string } = {};
       result.error.errors.forEach((err) => {
@@ -59,45 +69,39 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-
     try {
       if (isLogin) {
         const { error } = await signIn(email.trim(), password);
         if (error) {
-          // Handle specific error cases
-          if (error.message.includes("Invalid login credentials")) {
-            toast({
-              variant: "destructive",
-              title: "Invalid credentials",
-              description: "Please check your email and password and try again.",
-            });
-          } else {
-            toast({
-              variant: "destructive",
-              title: "Sign in failed",
-              description: error.message,
-            });
-          }
+          toast({
+            variant: "destructive",
+            title: error.message.includes("Invalid login credentials")
+              ? "Invalid credentials"
+              : "Sign in failed",
+            description: error.message.includes("Invalid login credentials")
+              ? "Please check your email and password and try again."
+              : error.message,
+          });
         } else {
           toast({
             title: "Welcome back!",
             description: "You've been signed in successfully.",
           });
-          navigate("/dashboard");
+          // FIX 5: navigate to intended page, not hardcoded /dashboard
+          navigate(from, { replace: true });
         }
       } else {
         const { error } = await signUp(email.trim(), password, name.trim());
         if (error) {
-          // Handle specific error cases
           if (error.message.includes("User already registered")) {
             toast({
               variant: "destructive",
               title: "Account exists",
-              description: "An account with this email already exists. Try signing in instead.",
+              description:
+                "An account with this email already exists. Try signing in instead.",
             });
             setIsLogin(true);
           } else {
@@ -112,10 +116,10 @@ export default function Auth() {
             title: "Account created!",
             description: "Welcome to SyncMates. Let's get you started.",
           });
-          navigate("/dashboard");
+          navigate("/dashboard", { replace: true });
         }
       }
-    } catch (err) {
+    } catch {
       toast({
         variant: "destructive",
         title: "Something went wrong",
@@ -140,7 +144,6 @@ export default function Auth() {
     <AppLayout>
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
         <div className="w-full max-w-md animate-fade-in-up">
-          {/* Logo */}
           <div className="flex flex-col items-center mb-8">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground mb-4">
               <Calendar className="h-7 w-7" />
@@ -155,8 +158,8 @@ export default function Auth() {
                 {isLogin ? "Welcome back" : "Create your account"}
               </CardTitle>
               <CardDescription>
-                {isLogin 
-                  ? "Sign in to continue to your dashboard" 
+                {isLogin
+                  ? "Sign in to continue to your dashboard"
                   : "Get started with SyncMates today"}
               </CardDescription>
             </CardHeader>
@@ -165,9 +168,9 @@ export default function Auth() {
                 {!isLogin && (
                   <div className="space-y-2">
                     <Label htmlFor="name">Name</Label>
-                    <Input 
-                      id="name" 
-                      placeholder="Your name" 
+                    <Input
+                      id="name"
+                      placeholder="Your name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       disabled={isSubmitting}
@@ -180,10 +183,10 @@ export default function Auth() {
                 )}
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="you@example.com" 
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={isSubmitting}
@@ -195,10 +198,10 @@ export default function Auth() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input 
-                    id="password" 
-                    type="password" 
-                    placeholder="••••••••" 
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isSubmitting}
@@ -208,9 +211,9 @@ export default function Auth() {
                     <p className="text-sm text-destructive">{errors.password}</p>
                   )}
                 </div>
-                <Button 
-                  type="submit" 
-                  className="w-full gap-2" 
+                <Button
+                  type="submit"
+                  className="w-full gap-2"
                   size="lg"
                   disabled={isSubmitting}
                 >
@@ -234,8 +237,8 @@ export default function Auth() {
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                   disabled={isSubmitting}
                 >
-                  {isLogin 
-                    ? "Don't have an account? Sign up" 
+                  {isLogin
+                    ? "Don't have an account? Sign up"
                     : "Already have an account? Sign in"}
                 </button>
               </div>
