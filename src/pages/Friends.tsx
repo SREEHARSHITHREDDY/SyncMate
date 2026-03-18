@@ -2,12 +2,11 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, UserPlus, Users, Check, X, Loader2, Calendar } from "lucide-react";
+import { Search, UserPlus, Users, Check, X, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFriends, Profile } from "@/hooks/useFriends";
-import { useCalendarPermissions } from "@/hooks/useCalendarPermissions";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Friends() {
@@ -32,26 +31,18 @@ export default function Friends() {
     searchUsers,
   } = useFriends();
 
-  const {
-    getRequestStatus,
-    requestAccess,
-    requestingAccess,
-  } = useCalendarPermissions();
-
   useEffect(() => {
-    if (!loading && !user) {
-      navigate("/auth");
-    }
+    if (!loading && !user) navigate("/auth");
   }, [user, loading, navigate]);
 
-  // Debounced search
+  // Debounced search — now triggers on name OR partial email (fixed in useFriends)
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (searchQuery.trim().length >= 2) {
         setIsSearching(true);
         try {
           const results = await searchUsers(searchQuery);
-          // Filter out existing friends and pending requests
+          // Filter out existing friends and people with pending requests
           const friendIds = friends.map((f) => f.profile?.user_id);
           const pendingIds = pendingRequests.map((r) => r.requester_id);
           setSearchResults(
@@ -75,10 +66,7 @@ export default function Friends() {
   const handleSendRequest = async (receiverId: string) => {
     try {
       await sendRequest(receiverId);
-      toast({
-        title: "Request sent!",
-        description: "Your friend request has been sent.",
-      });
+      toast({ title: "Request sent!", description: "Your friend request has been sent." });
       setSearchResults((prev) => prev.filter((r) => r.user_id !== receiverId));
     } catch (error: any) {
       toast({
@@ -92,10 +80,7 @@ export default function Friends() {
   const handleAcceptRequest = async (friendId: string) => {
     try {
       await acceptRequest(friendId);
-      toast({
-        title: "Request accepted!",
-        description: "You're now connected.",
-      });
+      toast({ title: "Request accepted!", description: "You're now connected." });
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -108,30 +93,11 @@ export default function Friends() {
   const handleRejectRequest = async (friendId: string) => {
     try {
       await rejectRequest(friendId);
-      toast({
-        title: "Request declined",
-        description: "The friend request has been declined.",
-      });
+      toast({ title: "Request declined", description: "The friend request has been declined." });
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Failed to decline request",
-        description: error.message || "Something went wrong",
-      });
-    }
-  };
-
-  const handleRequestCalendarAccess = async (ownerId: string) => {
-    try {
-      await requestAccess(ownerId);
-      toast({
-        title: "Request sent!",
-        description: "Your calendar access request has been sent.",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Failed to send request",
         description: error.message || "Something went wrong",
       });
     }
@@ -146,17 +112,24 @@ export default function Friends() {
         </div>
 
         {/* Search */}
-        <div className="relative mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by email..."
-            className="pl-10 h-12"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {isSearching && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-          )}
+        <div className="mb-8 animate-fade-in space-y-2" style={{ animationDelay: "0.1s" }}>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              // FIX 1 (from useFriends): placeholder updated — search now works by name too
+              placeholder="Search by name or email..."
+              className="pl-10 h-12"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {isSearching && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          {/* FIX: hint text so users know what to type */}
+          <p className="text-xs text-muted-foreground pl-1">
+            Type at least 2 characters to search by name or email
+          </p>
         </div>
 
         {/* Search Results */}
@@ -202,9 +175,18 @@ export default function Friends() {
           </Card>
         )}
 
+        {/* No results hint */}
+        {searchQuery.trim().length >= 2 && !isSearching && searchResults.length === 0 && (
+          <Card className="mb-6">
+            <CardContent className="py-6 text-center text-sm text-muted-foreground">
+              No users found for "{searchQuery}". Try a different name or email.
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Friend Requests */}
-          <Card className="animate-fade-in" style={{ animationDelay: '0.15s' }}>
+          <Card className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-accent" />
@@ -246,7 +228,7 @@ export default function Friends() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8 text-success hover:text-success hover:bg-success/10"
+                          className="h-8 w-8 text-green-500 hover:text-green-500 hover:bg-green-500/10"
                           onClick={() => handleAcceptRequest(request.id)}
                           disabled={acceptingRequest}
                         >
@@ -277,7 +259,7 @@ export default function Friends() {
           </Card>
 
           {/* Your Friends */}
-          <Card className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          <Card className="animate-fade-in" style={{ animationDelay: "0.2s" }}>
             <CardHeader>
               <CardTitle>Your Friends</CardTitle>
               <CardDescription>People you can plan events with</CardDescription>
@@ -289,61 +271,24 @@ export default function Friends() {
                 </div>
               ) : friends.length > 0 ? (
                 <div className="space-y-3">
-                  {friends.map((friend) => {
-                    const friendUserId = friend.profile?.user_id;
-                    const calendarStatus = friendUserId ? getRequestStatus(friendUserId) : "none";
-                    
-                    return (
-                      <div
-                        key={friend.id}
-                        className="flex items-center justify-between p-3 rounded-lg hover:bg-secondary/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-sm font-medium text-primary">
-                              {friend.profile?.name?.charAt(0).toUpperCase() || "?"}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="font-medium">{friend.profile?.name || "Unknown"}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {friend.profile?.email || ""}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        {/* Calendar Access Button */}
-                        {friendUserId && calendarStatus === "none" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRequestCalendarAccess(friendUserId)}
-                            disabled={requestingAccess}
-                          >
-                            {requestingAccess ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Calendar className="h-4 w-4 mr-2" />
-                                Request Access
-                              </>
-                            )}
-                          </Button>
-                        )}
-                        {calendarStatus === "pending" && (
-                          <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
-                            Request Pending
-                          </span>
-                        )}
-                        {calendarStatus === "accepted" && (
-                          <span className="text-xs text-success px-2 py-1 bg-success/10 rounded flex items-center gap-1">
-                            <Check className="h-3 w-3" />
-                            Access Granted
-                          </span>
-                        )}
+                  {friends.map((friend) => (
+                    <div
+                      key={friend.id}
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary/50 transition-colors"
+                    >
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-sm font-medium text-primary">
+                          {friend.profile?.name?.charAt(0).toUpperCase() || "?"}
+                        </span>
                       </div>
-                    );
-                  })}
+                      <div>
+                        <p className="font-medium">{friend.profile?.name || "Unknown"}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {friend.profile?.email || ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -354,7 +299,7 @@ export default function Friends() {
                     You haven't added any friends yet
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Search by email to find friends
+                    Search by name or email to find friends
                   </p>
                 </div>
               )}
