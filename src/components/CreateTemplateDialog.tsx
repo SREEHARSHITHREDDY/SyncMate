@@ -1,24 +1,17 @@
 import { useState, useEffect } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { EventTemplate } from "@/hooks/useEventTemplates";
+import { CATEGORY_COLORS, CategoryType } from "@/lib/eventCategories";
 
 interface CreateTemplateDialogProps {
   open: boolean;
@@ -29,11 +22,7 @@ interface CreateTemplateDialogProps {
 }
 
 export function CreateTemplateDialog({
-  open,
-  onOpenChange,
-  onSubmit,
-  isLoading,
-  editTemplate,
+  open, onOpenChange, onSubmit, isLoading, editTemplate,
 }: CreateTemplateDialogProps) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -41,6 +30,8 @@ export function CreateTemplateDialog({
   const [defaultTime, setDefaultTime] = useState("09:00");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [recurrenceType, setRecurrenceType] = useState<string | null>(null);
+  // FIX 14: category field added — was missing from template creation entirely
+  const [category, setCategory] = useState<CategoryType>("general");
 
   useEffect(() => {
     if (editTemplate) {
@@ -50,6 +41,7 @@ export function CreateTemplateDialog({
       setDefaultTime(editTemplate.default_time.slice(0, 5));
       setPriority(editTemplate.priority);
       setRecurrenceType(editTemplate.recurrence_type);
+      setCategory((editTemplate.category as CategoryType) || "general");
     } else {
       setName("");
       setTitle("");
@@ -57,6 +49,7 @@ export function CreateTemplateDialog({
       setDefaultTime("09:00");
       setPriority("medium");
       setRecurrenceType(null);
+      setCategory("general");
     }
   }, [editTemplate, open]);
 
@@ -71,6 +64,7 @@ export function CreateTemplateDialog({
       default_time: defaultTime,
       priority,
       recurrence_type: recurrenceType,
+      category,   // FIX 14: now saved
     });
     onOpenChange(false);
   };
@@ -89,50 +83,25 @@ export function CreateTemplateDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Template Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Weekly Team Meeting"
-              required
-            />
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Weekly Team Meeting" required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="title">Event Title</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Team Sync"
-              required
-            />
+            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Team Sync" required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="description">Description (Optional)</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Event details..."
-              rows={2}
-            />
+            <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Event details..." rows={2} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="time">Default Time</Label>
-              <Input
-                id="time"
-                type="time"
-                value={defaultTime}
-                onChange={(e) => setDefaultTime(e.target.value)}
-              />
+              <Input id="time" type="time" value={defaultTime} onChange={(e) => setDefaultTime(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="low">Low</SelectItem>
                   <SelectItem value="medium">Medium</SelectItem>
@@ -141,15 +110,29 @@ export function CreateTemplateDialog({
               </Select>
             </div>
           </div>
+
+          {/* FIX 14: Category field — was completely missing */}
+          <div className="space-y-2">
+            <Label htmlFor="category">Category</Label>
+            <Select value={category} onValueChange={(v) => setCategory(v as CategoryType)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(CATEGORY_COLORS).map(([key, { label, hex }]) => (
+                  <SelectItem key={key} value={key}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full" style={{ backgroundColor: hex }} />
+                      {label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="recurrence">Recurrence (Optional)</Label>
-            <Select
-              value={recurrenceType || "none"}
-              onValueChange={(v) => setRecurrenceType(v === "none" ? null : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="No recurrence" />
-              </SelectTrigger>
+            <Select value={recurrenceType || "none"} onValueChange={(v) => setRecurrenceType(v === "none" ? null : v)}>
+              <SelectTrigger><SelectValue placeholder="No recurrence" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No recurrence</SelectItem>
                 <SelectItem value="daily">Daily</SelectItem>
@@ -158,21 +141,13 @@ export function CreateTemplateDialog({
               </SelectContent>
             </Select>
           </div>
+
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={isLoading || !name.trim() || !title.trim()}>
               {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : editTemplate ? (
-                "Update Template"
-              ) : (
-                "Create Template"
-              )}
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+              ) : editTemplate ? "Update Template" : "Create Template"}
             </Button>
           </div>
         </form>
