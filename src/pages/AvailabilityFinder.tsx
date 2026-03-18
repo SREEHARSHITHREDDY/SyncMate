@@ -57,39 +57,54 @@ export default function AvailabilityFinder() {
   // (only events they've accepted/created — no private details exposed)
   useEffect(() => {
     const fetchFriendEvents = async (userId: string) => {
-      if (friendEvents[userId]) return; // already fetched
+  // FIX: removed `if (friendEvents[userId]) return` cache check —
+  // it was preventing updates when friend creates new events after initial load.
+  // Now always refetches when selectedFriendIds changes.
+  useEffect(() => {
+    const fetchFriendEvents = async (userId: string) => {
       setLoadingFriends(prev => new Set(prev).add(userId));
       try {
         const today = format(new Date(), "yyyy-MM-dd");
         const endDate = format(addDays(new Date(), DAYS_AHEAD), "yyyy-MM-dd");
 
-        // Get events they created
-        const { data: created } = await supabase
-          .from("events")
-          .select("event_date, event_time, end_time, title")
-          .eq("creator_id", userId)
-          .eq("is_completed", false)
-          .gte("event_date", today)
-          .lte("event_date", endDate);
+        // Get events they created — RLS on events table may block this
+        // so we wrap in try/catch and fall back to empty array
+        let created: any[] = [];
+        try {
+          const { data, error } = await supabase
+            .from("events")
+            .select("event_date, event_time, end_time, title")
+            .eq("creator_id", userId)
+            .eq("is_completed", false)
+            .gte("event_date", today)
+            .lte("event_date", endDate);
+          if (!error && data) created = data;
+        } catch {}
 
-        // Get events they accepted
-        const { data: responses } = await supabase
-          .from("event_responses")
-          .select("events(event_date, event_time, end_time, title)")
-          .eq("user_id", userId)
-          .eq("response", "yes");
+        // Get events they accepted via event_responses
+        let accepted: any[] = [];
+        try {
+          const { data: responses, error } = await supabase
+            .from("event_responses")
+            .select("events(event_date, event_time, end_time, title)")
+            .eq("user_id", userId)
+            .eq("response", "yes");
 
-        const accepted = (responses || [])
-          .map((r: any) => r.events)
-          .filter(Boolean)
-          .filter((e: any) => e.event_date >= today && e.event_date <= endDate);
+          if (!error && responses) {
+            accepted = responses
+              .map((r: any) => r.events)
+              .filter(Boolean)
+              .filter((e: any) => e.event_date >= today && e.event_date <= endDate);
+          }
+        } catch {}
 
         setFriendEvents(prev => ({
           ...prev,
-          [userId]: [...(created || []), ...accepted],
+          [userId]: [...created, ...accepted],
         }));
       } catch (err) {
         console.error("Failed to fetch friend events:", err);
+        setFriendEvents(prev => ({ ...prev, [userId]: [] }));
       } finally {
         setLoadingFriends(prev => {
           const next = new Set(prev);
@@ -99,6 +114,8 @@ export default function AvailabilityFinder() {
       }
     };
 
+    // Clear old friend events and refetch all selected friends
+    setFriendEvents({});
     selectedFriendIds.forEach(fetchFriendEvents);
   }, [selectedFriendIds]);
 
