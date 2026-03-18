@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Users, Flag, ArrowRight, Check, Loader2, Tag, Palette } from "lucide-react";
+import { Calendar, Clock, Users, Flag, ArrowRight, Check, Loader2, Tag, Palette, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { format } from "date-fns";
+import { format, isBefore, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -35,8 +35,8 @@ export default function CreateEvent() {
   const [description, setDescription] = useState("");
   const [date, setDate] = useState<Date>();
   const [time, setTime] = useState("");
-  const [endTime, setEndTime] = useState("");           // NEW
-  const [color, setColor] = useState<string | null>(null); // NEW
+  const [endTime, setEndTime] = useState("");
+  const [color, setColor] = useState<string | null>(null);
   const [priority, setPriority] = useState<Priority>("medium");
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("none");
   const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>();
@@ -44,30 +44,32 @@ export default function CreateEvent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [category, setCategory] = useState<CategoryType>("general");
 
-  // Pre-fill from template params
+  // FIX 10: track whether selected date+time is in the past
+  const isPastDateTime = (() => {
+    if (!date || !time) return false;
+    const [h, m] = time.split(":").map(Number);
+    const eventDT = new Date(date);
+    eventDT.setHours(h, m, 0, 0);
+    return isBefore(eventDT, new Date());
+  })();
+
   useEffect(() => {
     const templateTitle = searchParams.get("title");
     const templateDesc = searchParams.get("description");
     const templateTime = searchParams.get("time");
     const templatePriority = searchParams.get("priority") as Priority | null;
     const templateRecurrence = searchParams.get("recurrence");
-
     if (templateTitle) setTitle(templateTitle);
     if (templateDesc) setDescription(templateDesc);
     if (templateTime) setTime(templateTime);
-    if (templatePriority && ["low", "medium", "high"].includes(templatePriority)) {
-      setPriority(templatePriority);
-    }
-    if (templateRecurrence && ["daily", "weekly", "monthly"].includes(templateRecurrence)) {
-      setRecurrenceType(templateRecurrence as RecurrenceType);
-    }
+    if (templatePriority && ["low", "medium", "high"].includes(templatePriority)) setPriority(templatePriority);
+    if (templateRecurrence && ["daily", "weekly", "monthly"].includes(templateRecurrence)) setRecurrenceType(templateRecurrence as RecurrenceType);
   }, [searchParams]);
 
   useEffect(() => {
     if (!loading && !user) navigate("/auth");
   }, [user, loading, navigate]);
 
-  // Auto-set end time 1hr after start when start changes
   useEffect(() => {
     if (time && !endTime) {
       const [h, m] = time.split(":").map(Number);
@@ -79,27 +81,19 @@ export default function CreateEvent() {
 
   const toggleFriend = (friendUserId: string) => {
     setSelectedFriends((prev) =>
-      prev.includes(friendUserId)
-        ? prev.filter((id) => id !== friendUserId)
-        : [...prev, friendUserId]
+      prev.includes(friendUserId) ? prev.filter((id) => id !== friendUserId) : [...prev, friendUserId]
     );
   };
 
-  const getFriendUserId = (friend: typeof friends[0]) => {
-    return friend.requester_id === user?.id ? friend.receiver_id : friend.requester_id;
-  };
+  const getFriendUserId = (friend: typeof friends[0]) =>
+    friend.requester_id === user?.id ? friend.receiver_id : friend.requester_id;
 
   const handleSubmit = async () => {
     if (!user) return;
     if (!title.trim()) { toast.error("Please enter an event title"); return; }
     if (!date) { toast.error("Please select a date"); return; }
     if (!time) { toast.error("Please select a time"); return; }
-
-    // Validate end time is after start time
-    if (endTime && endTime <= time) {
-      toast.error("End time must be after start time");
-      return;
-    }
+    if (endTime && endTime <= time) { toast.error("End time must be after start time"); return; }
 
     setIsSubmitting(true);
     try {
@@ -163,12 +157,7 @@ export default function CreateEvent() {
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 Event Title
               </Label>
-              <Input
-                id="title"
-                placeholder="Coffee catch-up, Movie night, etc."
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
+              <Input id="title" placeholder="Coffee catch-up, Movie night, etc." value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
 
             {/* Date */}
@@ -179,10 +168,7 @@ export default function CreateEvent() {
               </Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}
-                  >
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}>
                     {date ? format(date, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
@@ -191,7 +177,7 @@ export default function CreateEvent() {
                     mode="single"
                     selected={date}
                     onSelect={setDate}
-                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                    disabled={(d) => d < startOfDay(new Date())}
                     initialFocus
                     className="p-3 pointer-events-auto"
                   />
@@ -206,12 +192,7 @@ export default function CreateEvent() {
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   Start Time
                 </Label>
-                <Input
-                  id="time"
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                />
+                <Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="end-time" className="flex items-center gap-2">
@@ -219,15 +200,18 @@ export default function CreateEvent() {
                   End Time
                   <span className="text-xs text-muted-foreground font-normal">(optional)</span>
                 </Label>
-                <Input
-                  id="end-time"
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  min={time || undefined}
-                />
+                <Input id="end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
               </div>
             </div>
+
+            {/* FIX 10: Past date/time warning */}
+            {isPastDateTime && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 text-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                This event is in the past. You can still create it, but it won't appear in upcoming events.
+              </div>
+            )}
+
             {endTime && time && endTime <= time && (
               <p className="text-xs text-destructive -mt-4">End time must be after start time</p>
             )}
@@ -235,13 +219,7 @@ export default function CreateEvent() {
             {/* Description */}
             <div className="space-y-2">
               <Label htmlFor="description">Description (optional)</Label>
-              <Textarea
-                id="description"
-                placeholder="Add any extra details about the event..."
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
+              <Textarea id="description" placeholder="Add any extra details about the event..." rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
 
             {/* Category + Priority */}
@@ -252,9 +230,7 @@ export default function CreateEvent() {
                   Category
                 </Label>
                 <Select value={category} onValueChange={(v) => setCategory(v as CategoryType)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(CATEGORY_COLORS).map(([key, { label, hex }]) => (
                       <SelectItem key={key} value={key}>
@@ -267,7 +243,6 @@ export default function CreateEvent() {
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Flag className="h-4 w-4 text-muted-foreground" />
@@ -276,10 +251,7 @@ export default function CreateEvent() {
                 <div className="flex gap-1">
                   {(["low", "medium", "high"] as Priority[]).map((p) => (
                     <Button
-                      key={p}
-                      type="button"
-                      variant="outline"
-                      size="sm"
+                      key={p} type="button" variant="outline" size="sm"
                       className={cn("flex-1 capitalize text-xs", priority === p && "border-primary bg-primary/5 text-primary")}
                       onClick={() => setPriority(p)}
                     >
@@ -295,30 +267,19 @@ export default function CreateEvent() {
               <Label className="flex items-center gap-2">
                 <Palette className="h-4 w-4 text-muted-foreground" />
                 Color
-                <span className="text-xs text-muted-foreground font-normal">(optional — overrides category color)</span>
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
               </Label>
               <div className="flex flex-wrap gap-2 items-center">
                 <button
-                  type="button"
-                  onClick={() => setColor(null)}
-                  className={cn(
-                    "h-7 w-7 rounded-full border-2 bg-secondary transition-transform text-xs",
-                    color === null ? "border-primary scale-110" : "border-border"
-                  )}
-                  title="Auto (from category)"
+                  type="button" onClick={() => setColor(null)}
+                  className={cn("h-7 w-7 rounded-full border-2 bg-secondary transition-transform flex items-center justify-center", color === null ? "border-primary scale-110" : "border-border")}
                 >
-                  <span className="sr-only">Auto</span>
-                  <span className="flex items-center justify-center text-[10px] font-bold text-muted-foreground">A</span>
+                  <span className="text-[10px] font-bold text-muted-foreground">A</span>
                 </button>
                 {COLOR_PALETTE.map((c) => (
                   <button
-                    key={c.hex}
-                    type="button"
-                    onClick={() => setColor(c.hex)}
-                    className={cn(
-                      "h-7 w-7 rounded-full border-2 transition-transform",
-                      color === c.hex ? "border-primary scale-110" : "border-transparent"
-                    )}
+                    key={c.hex} type="button" onClick={() => setColor(c.hex)}
+                    className={cn("h-7 w-7 rounded-full border-2 transition-transform", color === c.hex ? "border-primary scale-110" : "border-transparent")}
                     style={{ backgroundColor: c.hex }}
                     title={c.label}
                   />
@@ -340,9 +301,7 @@ export default function CreateEvent() {
                 <Users className="h-4 w-4 text-muted-foreground" />
                 Invite Friends
                 {selectedFriends.length > 0 && (
-                  <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                    {selectedFriends.length} selected
-                  </span>
+                  <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">{selectedFriends.length} selected</span>
                 )}
               </Label>
               {friends.length > 0 ? (
@@ -351,27 +310,16 @@ export default function CreateEvent() {
                     const friendUserId = getFriendUserId(friend);
                     const profile = friend.profile;
                     return (
-                      <div
-                        key={friend.id}
-                        className="flex items-center gap-3 p-3 hover:bg-secondary/50 cursor-pointer transition-colors"
-                        onClick={() => toggleFriend(friendUserId)}
-                      >
-                        <Checkbox
-                          checked={selectedFriends.includes(friendUserId)}
-                          onCheckedChange={() => toggleFriend(friendUserId)}
-                        />
+                      <div key={friend.id} className="flex items-center gap-3 p-3 hover:bg-secondary/50 cursor-pointer transition-colors" onClick={() => toggleFriend(friendUserId)}>
+                        <Checkbox checked={selectedFriends.includes(friendUserId)} onCheckedChange={() => toggleFriend(friendUserId)} />
                         <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                            {profile?.name?.slice(0, 2).toUpperCase() || "??"}
-                          </AvatarFallback>
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">{profile?.name?.slice(0, 2).toUpperCase() || "??"}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm truncate">{profile?.name || "Unknown"}</p>
                           <p className="text-xs text-muted-foreground truncate">{profile?.email || ""}</p>
                         </div>
-                        {selectedFriends.includes(friendUserId) && (
-                          <Check className="h-4 w-4 text-primary" />
-                        )}
+                        {selectedFriends.includes(friendUserId) && <Check className="h-4 w-4 text-primary" />}
                       </div>
                     );
                   })}
@@ -380,19 +328,13 @@ export default function CreateEvent() {
                 <div className="flex flex-col items-center justify-center p-6 rounded-lg bg-secondary/50 text-center">
                   <Users className="h-8 w-8 text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground">Add friends first to invite them to events</p>
-                  <Button variant="link" size="sm" onClick={() => navigate("/friends")} className="mt-2">
-                    Go to Friends
-                  </Button>
+                  <Button variant="link" size="sm" onClick={() => navigate("/friends")} className="mt-2">Go to Friends</Button>
                 </div>
               )}
             </div>
 
             <Button className="w-full gap-2" size="lg" onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Creating...</>
-              ) : (
-                <><ArrowRight className="h-4 w-4" />Create Event</>
-              )}
+              {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" />Creating...</> : <><ArrowRight className="h-4 w-4" />Create Event</>}
             </Button>
           </CardContent>
         </Card>
