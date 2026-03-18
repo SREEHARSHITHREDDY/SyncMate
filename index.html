@@ -17,6 +17,27 @@
     <meta name="twitter:image" content="/logo.png" />
 
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+
+    <!--
+      FIX 16: Prevent theme flash on load.
+      This inline script runs BEFORE React renders, reads the saved theme from
+      localStorage, and applies it immediately so there's no white flash before
+      the ThemeProvider kicks in.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme") || "dark";
+          var theme = stored;
+          if (stored === "system") {
+            theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          document.documentElement.classList.add(theme);
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
   </head>
 
   <body>
