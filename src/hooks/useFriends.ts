@@ -38,7 +38,6 @@ export function useFriends() {
 
       if (error) throw error;
 
-      // Get profiles for all friends
       const friendIds = data.map((f) =>
         f.requester_id === user.id ? f.receiver_id : f.requester_id
       );
@@ -64,6 +63,8 @@ export function useFriends() {
       })) as Friend[];
     },
     enabled: !!user,
+    // FIX 18: add staleTime so friends list doesn't refetch on every page navigation
+    staleTime: 1000 * 60 * 2,
   });
 
   // Get pending friend requests (received)
@@ -79,7 +80,6 @@ export function useFriends() {
         .eq("status", "pending");
 
       if (error) throw error;
-
       if (data.length === 0) return [];
 
       const requesterIds = data.map((f) => f.requester_id);
@@ -96,6 +96,7 @@ export function useFriends() {
       })) as Friend[];
     },
     enabled: !!user,
+    staleTime: 1000 * 60 * 2,
   });
 
   // Send friend request
@@ -110,7 +111,6 @@ export function useFriends() {
       });
 
       if (error) throw error;
-      // Notification is automatically created by database trigger
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["friends"] });
@@ -125,7 +125,6 @@ export function useFriends() {
         .from("friends")
         .update({ status: "accepted" })
         .eq("id", friendId);
-
       if (error) throw error;
     },
     onSuccess: () => {
@@ -141,7 +140,6 @@ export function useFriends() {
         .from("friends")
         .update({ status: "rejected" })
         .eq("id", friendId);
-
       if (error) throw error;
     },
     onSuccess: () => {
@@ -149,31 +147,30 @@ export function useFriends() {
     },
   });
 
-  // Search users by email using secure RPC function (returns masked emails)
-  // Requires exact email match for security - validates email format client-side
+  // FIX 1: Search by name OR partial email — no longer requires full exact email
+  // FIX 7: Exclude current user from results so you can't add yourself
   const searchUsers = async (query: string): Promise<Profile[]> => {
-    if (!user || !query.trim()) return [];
+    if (!user || query.trim().length < 2) return [];
 
-    // Validate email format before sending to server
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(query.trim())) {
-      // Return empty array for invalid email format - user needs to enter complete email
-      return [];
-    }
+    const q = query.trim().toLowerCase();
 
+    // Search profiles by name (ilike) or email (ilike)
     const { data, error } = await supabase
-      .rpc("search_profiles_by_email", { search_query: query.trim().toLowerCase() });
+      .from("profiles")
+      .select("user_id, name, email, avatar_url, created_at")
+      .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+      .neq("user_id", user.id)   // FIX 7: exclude yourself
+      .limit(10);
 
     if (error) throw error;
-    
-    // Map the RPC response to Profile format (with masked email)
-    return (data || []).map((item: { user_id: string; name: string; email_hint: string }) => ({
+
+    return (data || []).map((item) => ({
       id: item.user_id,
       user_id: item.user_id,
       name: item.name,
-      email: item.email_hint, // This is the masked email (e.g., "jo***@example.com")
-      avatar_url: null,
-      created_at: "",
+      email: item.email,
+      avatar_url: item.avatar_url,
+      created_at: item.created_at,
     }));
   };
 
