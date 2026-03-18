@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
+// FIX 14: Added category field — was missing even though it exists in the DB
 export interface EventTemplate {
   id: string;
   user_id: string;
@@ -12,6 +13,7 @@ export interface EventTemplate {
   default_time: string;
   priority: "low" | "medium" | "high";
   recurrence_type: string | null;
+  category: string | null;   // NEW
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +37,7 @@ export function useEventTemplates() {
       return data as EventTemplate[];
     },
     enabled: !!user?.id,
+    staleTime: 1000 * 60 * 2,
   });
 
   const createTemplate = useMutation({
