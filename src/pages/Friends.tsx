@@ -133,7 +133,7 @@ export default function Friends() {
         </div>
 
         {/* Search Results */}
-        {searchResults.length > 0 && (
+        {searchResults.length > 0 && !isSearching && (
           <Card className="mb-6 animate-fade-in">
             <CardHeader>
               <CardTitle className="text-lg">Search Results</CardTitle>
