@@ -3,19 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Calendar,
-  Clock,
-  Pencil,
-  Trash2,
-  Users,
-  Check,
-  X,
-  HelpCircle,
-  Loader2,
-  Repeat,
-  CalendarX,
-  FileText,
-  ExternalLink,
+  Calendar, Clock, Pencil, Trash2, Users, Check, X,
+  HelpCircle, Loader2, Repeat, CalendarX, FileText, ExternalLink,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useState } from "react";
@@ -26,18 +15,11 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { EventWithResponse } from "@/hooks/useEvents";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
+  Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MeetingMinutesDialog } from "./MeetingMinutesDialog";
@@ -46,10 +28,7 @@ import { getEventHex, getDurationLabel, CATEGORY_COLORS, CategoryType } from "@/
 interface Attendee {
   user_id: string;
   response: string;
-  profile: {
-    name: string;
-    avatar_url: string | null;
-  } | null;
+  profile: { name: string; avatar_url: string | null } | null;
 }
 
 interface EventCardProps {
@@ -61,11 +40,7 @@ interface EventCardProps {
 }
 
 export function EventCard({
-  event,
-  onEdit,
-  onCancelOccurrence,
-  showActions = true,
-  isCancelled = false,
+  event, onEdit, onCancelOccurrence, showActions = true, isCancelled = false,
 }: EventCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -78,18 +53,14 @@ export function EventCard({
   const [isTogglingComplete, setIsTogglingComplete] = useState(false);
   const [showMinutesDialog, setShowMinutesDialog] = useState(false);
 
-  const isCompleted = (event as any).is_completed || false;
+  const isCompleted = event.is_completed || false;
   const isStrikethrough = isCancelled || isCompleted;
-
-  // Color + category
   const eventData = event as any;
   const hex = getEventHex(eventData.category, eventData.color);
   const categoryLabel =
     eventData.category && CATEGORY_COLORS[eventData.category as CategoryType]
       ? CATEGORY_COLORS[eventData.category as CategoryType].label
       : null;
-
-  // Duration
   const duration = getDurationLabel(event.event_time, eventData.end_time);
   const endTimeStr = eventData.end_time ? eventData.end_time.slice(0, 5) : null;
 
@@ -132,9 +103,12 @@ export function EventCard({
     }
   };
 
+  // FIX 8: Always refetch attendees on every click — no more stale cached list.
+  // Old code checked `if (attendees.length > 0)` and skipped the fetch,
+  // meaning new responses were invisible until page refresh.
   const loadAttendees = async () => {
-    if (attendees.length > 0) {
-      setShowAttendees(!showAttendees);
+    if (showAttendees) {
+      setShowAttendees(false);
       return;
     }
     setLoadingAttendees(true);
@@ -144,50 +118,43 @@ export function EventCard({
         .select("user_id, response, profiles:user_id(name, avatar_url)")
         .eq("event_id", event.id);
       if (error) throw error;
-      const formatted = (data || []).map((r: any) => ({
-        user_id: r.user_id,
-        response: r.response,
-        profile: r.profiles,
-      }));
-      setAttendees(formatted);
+      setAttendees(
+        (data || []).map((r: any) => ({
+          user_id: r.user_id,
+          response: r.response,
+          profile: r.profiles,
+        }))
+      );
       setShowAttendees(true);
-    } catch (error: any) {
+    } catch {
       toast.error("Failed to load attendees");
     } finally {
       setLoadingAttendees(false);
     }
   };
 
-  // FIX: "View Plan Details" used to link to /event/:id which doesn't exist.
-  // Now navigates to /calendar with the event date so user can see it in context.
   const handleViewPlanDetails = () => {
     navigate(`/calendar?date=${event.event_date}`);
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "low": return "bg-blue-500";
-      case "high": return "bg-red-500";
-      default: return "bg-amber-500";
-    }
+  const getPriorityColor = (p: string) => {
+    if (p === "low") return "bg-blue-500";
+    if (p === "high") return "bg-red-500";
+    return "bg-amber-500";
   };
 
-  const getResponseIcon = (response: string) => {
-    switch (response) {
-      case "yes": return <Check className="h-3 w-3 text-primary" />;
-      case "no": return <X className="h-3 w-3 text-destructive" />;
-      case "maybe": return <HelpCircle className="h-3 w-3 text-warning" />;
-      default: return <Clock className="h-3 w-3 text-muted-foreground" />;
-    }
+  const getResponseIcon = (r: string) => {
+    if (r === "yes") return <Check className="h-3 w-3 text-green-500" />;
+    if (r === "no") return <X className="h-3 w-3 text-destructive" />;
+    if (r === "maybe") return <HelpCircle className="h-3 w-3 text-amber-500" />;
+    return <Clock className="h-3 w-3 text-muted-foreground" />;
   };
 
-  const getResponseLabel = (response: string) => {
-    switch (response) {
-      case "yes": return "Going";
-      case "no": return "Not going";
-      case "maybe": return "Maybe";
-      default: return "Pending";
-    }
+  const getResponseLabel = (r: string) => {
+    if (r === "yes") return "Going";
+    if (r === "no") return "Not going";
+    if (r === "maybe") return "Maybe";
+    return "Pending";
   };
 
   return (
@@ -198,7 +165,6 @@ export function EventCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 flex-1 min-w-0">
-            {/* Completion checkbox */}
             {event.isCreator && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -216,30 +182,19 @@ export function EventCard({
                 </TooltipContent>
               </Tooltip>
             )}
-
             <div className={`h-2 w-2 rounded-full mt-2 shrink-0 ${getPriorityColor(event.priority)}`} />
-
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h4 className={`font-medium truncate ${isStrikethrough ? "line-through text-muted-foreground" : ""}`}>
                   {event.title}
                 </h4>
-                {/* Category badge */}
                 {categoryLabel && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs shrink-0 text-white"
-                    style={{ backgroundColor: hex + "cc" }}
-                  >
+                  <Badge variant="secondary" className="text-xs shrink-0 text-white" style={{ backgroundColor: hex + "cc" }}>
                     {categoryLabel}
                   </Badge>
                 )}
-                {isCancelled && (
-                  <Badge variant="destructive" className="text-xs shrink-0">Cancelled</Badge>
-                )}
-                {isCompleted && !isCancelled && (
-                  <Badge variant="secondary" className="text-xs shrink-0">Completed</Badge>
-                )}
+                {isCancelled && <Badge variant="destructive" className="text-xs shrink-0">Cancelled</Badge>}
+                {isCompleted && !isCancelled && <Badge variant="secondary" className="text-xs shrink-0">Completed</Badge>}
                 {eventData.recurrence_type && (
                   <Badge variant="secondary" className="gap-1 text-xs shrink-0">
                     <Repeat className="h-3 w-3" />
@@ -247,7 +202,6 @@ export function EventCard({
                   </Badge>
                 )}
               </div>
-
               <div className={`flex items-center gap-3 text-sm mt-1 flex-wrap ${isStrikethrough ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
                 <span className={`flex items-center gap-1 ${isStrikethrough ? "line-through" : ""}`}>
                   <Calendar className="h-3 w-3" />
@@ -260,7 +214,6 @@ export function EventCard({
                   <span className="text-xs opacity-70">({duration})</span>
                 </span>
               </div>
-
               {event.description && (
                 <p className={`text-sm mt-2 line-clamp-2 ${isStrikethrough ? "line-through text-muted-foreground/70" : "text-muted-foreground"}`}>
                   {event.description}
@@ -274,33 +227,19 @@ export function EventCard({
               {eventData.recurrence_type && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={() => onCancelOccurrence?.(event)}
-                    >
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onCancelOccurrence?.(event)}>
                       <CalendarX className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Cancel specific occurrence</TooltipContent>
                 </Tooltip>
               )}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8"
-                onClick={() => onEdit?.(event)}
-              >
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit?.(event)}>
                 <Pencil className="h-4 w-4" />
               </Button>
               <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                 <DialogTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                  >
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </DialogTrigger>
@@ -312,9 +251,7 @@ export function EventCard({
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-                      Cancel
-                    </Button>
+                    <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
                     <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
                       {isDeleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                       Delete
@@ -326,41 +263,18 @@ export function EventCard({
           )}
         </div>
 
-        {/* Action buttons row */}
+        {/* Action buttons */}
         <div className="mt-3 pt-3 border-t border-border">
           <div className="flex flex-wrap gap-2">
-            {/* FIX: was linking to /event/:id which doesn't exist → now navigates to /calendar */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2 text-muted-foreground hover:text-foreground px-2"
-              onClick={handleViewPlanDetails}
-            >
+            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground px-2" onClick={handleViewPlanDetails}>
               <ExternalLink className="h-3 w-3" />
               View Plan Details
             </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2 text-muted-foreground hover:text-foreground px-2"
-              onClick={loadAttendees}
-              disabled={loadingAttendees}
-            >
-              {loadingAttendees ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Users className="h-3 w-3" />
-              )}
+            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground px-2" onClick={loadAttendees} disabled={loadingAttendees}>
+              {loadingAttendees ? <Loader2 className="h-3 w-3 animate-spin" /> : <Users className="h-3 w-3" />}
               {showAttendees ? "Hide attendees" : "Show attendees"}
             </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2 text-muted-foreground hover:text-foreground px-2"
-              onClick={() => setShowMinutesDialog(true)}
-            >
+            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground px-2" onClick={() => setShowMinutesDialog(true)}>
               <FileText className="h-3 w-3" />
               Meeting Minutes
             </Button>
@@ -369,39 +283,27 @@ export function EventCard({
           {showAttendees && attendees.length > 0 && (
             <div className="mt-2 space-y-2">
               {attendees.map((attendee) => (
-                <div
-                  key={attendee.user_id}
-                  className="flex items-center justify-between gap-2 p-2 rounded-lg bg-secondary/50"
-                >
+                <div key={attendee.user_id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-secondary/50">
                   <div className="flex items-center gap-2">
                     <Avatar className="h-6 w-6">
                       <AvatarImage src={attendee.profile?.avatar_url || undefined} />
-                      <AvatarFallback className="text-xs">
-                        {attendee.profile?.name?.charAt(0).toUpperCase() || "?"}
-                      </AvatarFallback>
+                      <AvatarFallback className="text-xs">{attendee.profile?.name?.charAt(0).toUpperCase() || "?"}</AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium">
-                      {attendee.profile?.name || "Unknown"}
-                    </span>
+                    <span className="text-sm font-medium">{attendee.profile?.name || "Unknown"}</span>
                   </div>
                   <Tooltip>
                     <TooltipTrigger>
                       <div className="flex items-center gap-1">
                         {getResponseIcon(attendee.response)}
-                        <span className="text-xs text-muted-foreground">
-                          {getResponseLabel(attendee.response)}
-                        </span>
+                        <span className="text-xs text-muted-foreground">{getResponseLabel(attendee.response)}</span>
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent>
-                      {attendee.profile?.name} is {getResponseLabel(attendee.response).toLowerCase()}
-                    </TooltipContent>
+                    <TooltipContent>{attendee.profile?.name} is {getResponseLabel(attendee.response).toLowerCase()}</TooltipContent>
                   </Tooltip>
                 </div>
               ))}
             </div>
           )}
-
           {showAttendees && attendees.length === 0 && (
             <p className="text-sm text-muted-foreground mt-2">No invitees for this event</p>
           )}
