@@ -132,7 +132,7 @@ export default function Friends() {
           </p>
         </div>
 
-        {/* Search Results */}
+        {/* Search Results — FIX: hide while searching to prevent flicker */}
         {searchResults.length > 0 && !isSearching && (
           <Card className="mb-6 animate-fade-in">
             <CardHeader>
