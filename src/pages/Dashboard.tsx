@@ -9,11 +9,12 @@ import { useEvents, EventWithResponse } from "@/hooks/useEvents";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useUserActionItems } from "@/hooks/useUserActionItems";
 import { Button } from "@/components/ui/button";
-import { format, isToday, isTomorrow, parseISO } from "date-fns";
+import { format, isToday, isTomorrow, parseISO, isPast } from "date-fns";
 import { EventInviteCard } from "@/components/EventInviteCard";
 import { SwipeableEventCard } from "@/components/SwipeableEventCard";
 import { EditEventDialog } from "@/components/EditEventDialog";
 import { PriorityFilter } from "@/components/PriorityFilter";
+import { CompletedFilter } from "@/components/CompletedFilter";
 import { CancelOccurrenceDialog } from "@/components/CancelOccurrenceDialog";
 import { MyActionItems } from "@/components/MyActionItems";
 
@@ -28,81 +29,97 @@ export default function Dashboard() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { pendingRequests } = useFriends();
-  const { events, pendingInvites } = useEvents();
+  // FIX 9: use upcomingEvents (future only) instead of all events for dashboard stats
+  const { upcomingEvents, pendingInvites } = useEvents();
   const { unreadCount } = useNotifications();
   const { totalCount: actionItemCount, overdueCount: overdueActionItems } = useUserActionItems();
   const [editingEvent, setEditingEvent] = useState<EventWithResponse | null>(null);
   const [cancellingEvent, setCancellingEvent] = useState<EventWithResponse | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<"all" | "low" | "medium" | "high">("all");
+  const [showCompleted, setShowCompleted] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate("/auth");
-    }
+    if (!loading && !user) navigate("/auth");
   }, [user, loading, navigate]);
 
   const userName = user?.user_metadata?.name || "there";
 
-  // Filter active events by priority (exclude completed)
+  // FIX 9: filter from upcomingEvents not all events
   const filteredEvents = useMemo(() => {
-    let filtered = events.filter((e) => !(e as any).is_completed);
-    
-    // Filter by priority
+    let filtered = upcomingEvents;
     if (priorityFilter !== "all") {
       filtered = filtered.filter((e) => e.priority === priorityFilter);
     }
-    
+    if (!showCompleted) {
+      filtered = filtered.filter((e) => !e.is_completed);
+    }
     return filtered;
-  }, [events, priorityFilter]);
+  }, [upcomingEvents, priorityFilter, showCompleted]);
 
-  // Get completed events
-  const completedEvents = useMemo(() => {
-    return events.filter((e) => (e as any).is_completed);
-  }, [events]);
+  const completedCount = useMemo(() => {
+    return upcomingEvents.filter((e) => e.is_completed).length;
+  }, [upcomingEvents]);
 
-  // Count completed events
-  const completedCount = completedEvents.length;
+  const upcomingEventsList = filteredEvents.slice(0, 5);
 
-  // Get upcoming events for this week (active only)
-  const upcomingEvents = filteredEvents.slice(0, 5);
-  const nextEvent = events.filter((e) => !(e as any).is_completed)[0];
+  // FIX 4: nextEvent must be in the FUTURE — skip events that already started
+  // FIX 9: count only non-completed upcoming events
+  const activeUpcomingCount = useMemo(() => {
+    return upcomingEvents.filter((e) => !e.is_completed).length;
+  }, [upcomingEvents]);
 
-  const formatEventDate = (dateStr: string, timeStr: string) => {
-    const date = parseISO(dateStr);
-    if (isToday(date)) {
-      return `Today, ${timeStr.slice(0, 5)}`;
-    }
-    if (isTomorrow(date)) {
-      return `Tomorrow, ${timeStr.slice(0, 5)}`;
-    }
-    return `${format(date, "EEE, MMM d")}, ${timeStr.slice(0, 5)}`;
-  };
+  const nextEvent = useMemo(() => {
+    const now = new Date();
+    return upcomingEvents
+      .filter((e) => !e.is_completed)
+      .find((e) => {
+        const eventDateTime = new Date(`${e.event_date}T${e.event_time}`);
+        return eventDateTime > now;
+      });
+  }, [upcomingEvents]);
 
+  // FIX 4: getTimeUntilNextEvent no longer returns negative values
   const getTimeUntilNextEvent = () => {
     if (!nextEvent) return null;
     const eventDateTime = new Date(`${nextEvent.event_date}T${nextEvent.event_time}`);
     const now = new Date();
     const diffMs = eventDateTime.getTime() - now.getTime();
+
+    // Should never be negative since nextEvent is always in the future now,
+    // but guard just in case
+    if (diffMs <= 0) return "Soon";
+
+    const diffMins = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffHours / 24);
 
     if (diffDays > 0) return `${diffDays}d`;
     if (diffHours > 0) return `${diffHours}h`;
+    if (diffMins > 0) return `${diffMins}m`;
     return "Soon";
+  };
+
+  const formatEventDate = (dateStr: string, timeStr: string) => {
+    const date = parseISO(dateStr);
+    if (isToday(date)) return `Today, ${timeStr.slice(0, 5)}`;
+    if (isTomorrow(date)) return `Tomorrow, ${timeStr.slice(0, 5)}`;
+    return `${format(date, "EEE, MMM d")}, ${timeStr.slice(0, 5)}`;
   };
 
   return (
     <AppLayout>
       <div className="container py-8">
-        {/* Welcome Section */}
+        {/* Welcome */}
         <div className="mb-8 animate-fade-in">
-          <h1 className="text-3xl font-semibold mb-2">{getGreeting()}, {userName}! 👋</h1>
+          <h1 className="text-3xl font-semibold mb-2">
+            {getGreeting()}, {userName}! 👋
+          </h1>
           <p className="text-muted-foreground">Here's what's happening with your plans</p>
         </div>
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          <Card className="card-hover animate-fade-in" style={{ animationDelay: '0.1s' }}>
+          <Card className="card-hover animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Upcoming Events
@@ -110,12 +127,13 @@ export default function Dashboard() {
               <Calendar className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{events.filter(e => !(e as any).is_completed).length}</div>
+              {/* FIX 9: use activeUpcomingCount instead of events.filter(...).length */}
+              <div className="text-2xl font-bold">{activeUpcomingCount}</div>
               <p className="text-xs text-muted-foreground">Active</p>
             </CardContent>
           </Card>
 
-          <Card className="card-hover animate-fade-in" style={{ animationDelay: '0.15s' }}>
+          <Card className="card-hover animate-fade-in" style={{ animationDelay: "0.15s" }}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Friend Requests
@@ -128,7 +146,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="card-hover animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          <Card className="card-hover animate-fade-in" style={{ animationDelay: "0.2s" }}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Action Items
@@ -143,7 +161,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="card-hover animate-fade-in" style={{ animationDelay: '0.25s' }}>
+          <Card className="card-hover animate-fade-in" style={{ animationDelay: "0.25s" }}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Completed
@@ -156,7 +174,8 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="card-hover animate-fade-in" style={{ animationDelay: '0.3s' }}>
+          {/* FIX 4: Next Event card now always shows a future event — no more negative times */}
+          <Card className="card-hover animate-fade-in" style={{ animationDelay: "0.3s" }}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Next Event
@@ -166,7 +185,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="text-2xl font-bold">{getTimeUntilNextEvent() || "—"}</div>
               <p className="text-xs text-muted-foreground truncate">
-                {nextEvent?.title || "No upcoming events"}
+                {nextEvent ? nextEvent.title : "No upcoming events"}
               </p>
             </CardContent>
           </Card>
@@ -178,19 +197,19 @@ export default function Dashboard() {
         </div>
 
         {/* Upcoming Events */}
-        <Card className="animate-fade-in" style={{ animationDelay: '0.3s' }}>
+        <Card className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Upcoming Plans</CardTitle>
               <CardDescription>
-              {upcomingEvents.length > 0
+                {upcomingEventsList.length > 0
                   ? "Swipe right on mobile to mark as complete"
                   : "Your scheduled events will appear here"}
               </CardDescription>
             </div>
-            <Link to="/create-event">
+            <Link to="/calendar">
               <Button size="sm" className="gap-2">
-                Create Event
+                Calendar
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -198,10 +217,11 @@ export default function Dashboard() {
           <CardContent>
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <PriorityFilter value={priorityFilter} onChange={setPriorityFilter} />
+              <CompletedFilter showCompleted={showCompleted} onChange={setShowCompleted} />
             </div>
-            {upcomingEvents.length > 0 ? (
+            {upcomingEventsList.length > 0 ? (
               <div className="space-y-4">
-                {upcomingEvents.map((event) => (
+                {upcomingEventsList.map((event) => (
                   <SwipeableEventCard
                     key={event.id}
                     event={event}
@@ -215,16 +235,19 @@ export default function Dashboard() {
                 <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                   <Calendar className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="text-lg font-medium mb-2">No active events</h3>
+                <h3 className="text-lg font-medium mb-2">
+                  {showCompleted ? "No events yet" : "No active events"}
+                </h3>
                 <p className="text-muted-foreground max-w-sm mb-4">
-                  {completedCount > 0 
-                    ? "All your events are completed! Check the Completed section below."
-                    : "Start by creating an event or adding friends to plan something together!"
-                  }
+                  {showCompleted
+                    ? "Start by creating an event or adding friends to plan something together!"
+                    : completedCount > 0
+                    ? "All your events are completed! Toggle the filter to see them."
+                    : "Start by creating an event or adding friends to plan something together!"}
                 </p>
-                <Link to="/create-event">
+                <Link to="/calendar">
                   <Button className="gap-2">
-                    Create Your First Event
+                    Go to Calendar
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
@@ -233,43 +256,17 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Completed Events Section */}
-        {completedCount > 0 && (
-          <Card className="animate-fade-in mt-6" style={{ animationDelay: '0.35s' }}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-muted-foreground" />
-                Completed Events ({completedCount})
-              </CardTitle>
-              <CardDescription>
-                Access meeting minutes and details from completed events
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {completedEvents.map((event) => (
-                  <SwipeableEventCard
-                    key={event.id}
-                    event={event}
-                    onEdit={setEditingEvent}
-                    onCancelOccurrence={setCancellingEvent}
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Pending Event Invites */}
         {pendingInvites.length > 0 && (
-          <Card className="animate-fade-in mt-6" style={{ animationDelay: '0.35s' }}>
+          <Card className="animate-fade-in mt-6" style={{ animationDelay: "0.35s" }}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bell className="h-5 w-5 text-warning" />
                 Event Invitations
               </CardTitle>
               <CardDescription>
-                You have {pendingInvites.length} pending invitation{pendingInvites.length > 1 ? "s" : ""}
+                You have {pendingInvites.length} pending invitation
+                {pendingInvites.length > 1 ? "s" : ""}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -282,14 +279,11 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Edit Event Dialog */}
         <EditEventDialog
           event={editingEvent}
           open={!!editingEvent}
           onOpenChange={(open) => !open && setEditingEvent(null)}
         />
-
-        {/* Cancel Occurrence Dialog */}
         <CancelOccurrenceDialog
           event={cancellingEvent}
           open={!!cancellingEvent}
