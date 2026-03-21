@@ -9,8 +9,8 @@ export interface Event {
   description: string | null;
   event_date: string;
   event_time: string;
-  end_time: string | null;       // NEW: optional end time
-  color: string | null;          // NEW: optional custom hex color
+  end_time: string | null;
+  color: string | null;
   priority: "low" | "medium" | "high";
   recurrence_type: string | null;
   recurrence_end_date: string | null;
@@ -25,25 +25,37 @@ export interface EventWithResponse extends Event {
 }
 
 export function useEvents() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   const eventsQuery = useQuery({
     queryKey: ["events", user?.id],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user) {
+        console.log("❌ No user — skipping fetch");
+        return [];
+      }
 
-      const today = new Date().toISOString().split("T")[0];
+      // 🔥 DEBUG: Check actual Supabase session
+      const { data: userData } = await supabase.auth.getUser();
+      console.log("✅ CURRENT USER:", userData);
 
-      // Get ALL events created by user (no date filter — calendar needs past events too)
-      const { data: createdEvents, error: createdError } = await supabase
+      // 🔥 FETCH ALL EVENTS (NO FILTER FIRST)
+      const { data: allEventsRaw, error: allError } = await supabase
         .from("events")
         .select("*")
-        .eq("creator_id", user.id)
         .order("event_date", { ascending: true });
 
-      if (createdError) throw createdError;
+      console.log("📦 ALL EVENTS FROM DB:", allEventsRaw);
+      console.log("❗ ERROR (if any):", allError);
 
-      // Get event invitations
+      if (allError) throw allError;
+
+      // 🔥 NOW FILTER MANUALLY (SAFE)
+      const createdEvents = (allEventsRaw || []).filter(
+        (e) => e.creator_id === user.id
+      );
+
+      // 🔥 Fetch invitations
       const { data: responses, error: responsesError } = await supabase
         .from("event_responses")
         .select("*, events(*)")
@@ -59,34 +71,39 @@ export function useEvents() {
           isCreator: false,
         })) as EventWithResponse[];
 
-      const createdWithFlag = (createdEvents || []).map((e) => ({
+      const createdWithFlag = createdEvents.map((e) => ({
         ...(e as unknown as Event),
         isCreator: true,
         response: "yes" as const,
       })) as EventWithResponse[];
 
-      // Combine and deduplicate
+      // 🔥 Combine + deduplicate
       const allEvents = [...createdWithFlag];
-      for (const invited of (invitedEvents || [])) {
-        if (!allEvents.some(e => e.id === invited.id)) {
+      for (const invited of invitedEvents) {
+        if (!allEvents.some((e) => e.id === invited.id)) {
           allEvents.push(invited);
         }
       }
 
       allEvents.sort(
-        (a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime()
+        (a, b) =>
+          new Date(a.event_date).getTime() -
+          new Date(b.event_date).getTime()
       );
 
       return allEvents;
     },
-    enabled: !!user,
-    staleTime: 1000 * 60 * 2,
+
+    // 🔥 CRITICAL FIXES
+    enabled: !!user && !loading,   // wait for auth
+    staleTime: 0,                 // disable caching temporarily
   });
 
-  // Upcoming events only (today onwards) — for dashboard and invites
+  // 🔥 Upcoming events (for dashboard)
   const today = new Date().toISOString().split("T")[0];
+
   const upcomingEvents = (eventsQuery.data || []).filter(
-    e => e.event_date >= today
+    (e) => e.event_date >= today
   );
 
   const pendingInvitesQuery = useQuery({
@@ -110,14 +127,14 @@ export function useEvents() {
           response: r.response,
         }));
     },
-    enabled: !!user,
-    staleTime: 1000 * 60 * 2,
+    enabled: !!user && !loading,
+    staleTime: 0,
   });
 
   return {
-    events: eventsQuery.data || [],         // ALL events (past + future) for calendar
-    upcomingEvents,                          // future only — for dashboard
-    eventsLoading: eventsQuery.isLoading,
+    events: eventsQuery.data || [],
+    upcomingEvents,
+    eventsLoading: eventsQuery.isLoading || loading,
     pendingInvites: pendingInvitesQuery.data || [],
     pendingInvitesLoading: pendingInvitesQuery.isLoading,
   };
