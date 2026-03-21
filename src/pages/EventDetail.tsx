@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { AvailabilityGrid } from "@/components/AvailabilityGrid";
 import { CommitmentPanel } from "@/components/CommitmentPanel";
 import { LifecycleTracker } from "@/components/LifecycleTracker";

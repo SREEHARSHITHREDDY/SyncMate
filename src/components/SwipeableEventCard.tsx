@@ -3,7 +3,7 @@ import { useSwipeable } from "react-swipeable";
 import { Check, X } from "lucide-react";
 import { EventCard } from "./EventCard";
 import { EventWithResponse } from "@/hooks/useEvents";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";

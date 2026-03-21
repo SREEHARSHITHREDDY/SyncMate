@@ -9,7 +9,7 @@ import { Zap, Users, Clock, CalendarCheck, Info, ArrowRight, Loader2 } from "luc
 import { useFriends } from "@/hooks/useFriends";
 import { useEvents } from "@/hooks/useEvents";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
 import { addDays, format, isToday, isTomorrow, isWeekend, parseISO, isSameDay } from "date-fns";
 import { QuickEventDialog } from "@/components/calendar/QuickEventDialog";

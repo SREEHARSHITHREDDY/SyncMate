@@ -1,3 +1,6 @@
+import { useEffect } from "react";
+import { supabase } from "@/lib/supabase"; // make sure this path is correct
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -25,52 +28,71 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Global staleTime: queries won't refetch more than once every 2 minutes
-      // when navigating between pages. Overridden per-query where needed.
       staleTime: 1000 * 60 * 2,
     },
   },
 });
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <RealtimeProvider>
-              <Routes>
-                {/* Public routes */}
-                <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
+const App = () => {
 
-                {/* Protected routes — wrapped with ProtectedRoute so there is
-                    no flash of protected content before the auth redirect fires.
-                    Previously every page did its own useEffect redirect which
-                    runs after first render, showing a brief flash. */}
-                <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                <Route path="/friends" element={<ProtectedRoute><Friends /></ProtectedRoute>} />
-                <Route path="/create-event" element={<ProtectedRoute><CreateEvent /></ProtectedRoute>} />
-                <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
-                <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                <Route path="/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
-                <Route path="/my-tasks" element={<ProtectedRoute><MyTasks /></ProtectedRoute>} />
+  // 🔥 DEBUG AUTH STATE
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      console.log("SESSION:", data.session);
 
-                {/* NEW: Shared availability finder — the core SyncMates differentiator */}
-                <Route path="/find-time" element={<ProtectedRoute><AvailabilityFinder /></ProtectedRoute>} />
+      const { data: user } = await supabase.auth.getUser();
+      console.log("USER:", user);
+    };
 
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </RealtimeProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+    checkSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log("AUTH CHANGE:", event, session);
+      }
+    );
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <RealtimeProvider>
+                <Routes>
+                  {/* Public routes */}
+                  <Route path="/" element={<Index />} />
+                  <Route path="/auth" element={<Auth />} />
+
+                  {/* Protected routes */}
+                  <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                  <Route path="/friends" element={<ProtectedRoute><Friends /></ProtectedRoute>} />
+                  <Route path="/create-event" element={<ProtectedRoute><CreateEvent /></ProtectedRoute>} />
+                  <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
+                  <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
+                  <Route path="/my-tasks" element={<ProtectedRoute><MyTasks /></ProtectedRoute>} />
+                  <Route path="/find-time" element={<ProtectedRoute><AvailabilityFinder /></ProtectedRoute>} />
+
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </RealtimeProvider>
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

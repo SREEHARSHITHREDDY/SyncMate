@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 
 // FIX 15: VAPID public key now read from environment variable.
 // Was hardcoded as a string literal — maintenance problem if key rotates.

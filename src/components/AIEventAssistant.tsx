@@ -8,7 +8,7 @@ import { Bot, Send, Loader2, Sparkles, X, Calendar, Check, Mic, MicOff, Volume2,
 import { useAIEventAssistant } from "@/hooks/useAIEventAssistant";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";

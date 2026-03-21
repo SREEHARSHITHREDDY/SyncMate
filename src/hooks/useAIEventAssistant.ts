@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useEvents } from "@/hooks/useEvents";
 import { useAIConversation, AIMessage } from "@/hooks/useAIConversation";
 import { toast } from "sonner";
