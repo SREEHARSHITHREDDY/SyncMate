@@ -31,22 +31,17 @@ export function useEvents() {
     queryKey: ["events", user?.id],
     queryFn: async () => {
       if (!user) {
-        console.log("❌ No user — skipping fetch");
         return [];
       }
 
       // 🔥 DEBUG: Check actual Supabase session
       const { data: userData } = await supabase.auth.getUser();
-      console.log("✅ CURRENT USER:", userData);
 
       // 🔥 FETCH ALL EVENTS (NO FILTER FIRST)
       const { data: allEventsRaw, error: allError } = await supabase
         .from("events")
         .select("*")
         .order("event_date", { ascending: true });
-
-      console.log("📦 ALL EVENTS FROM DB:", allEventsRaw);
-      console.log("❗ ERROR (if any):", allError);
 
       if (allError) throw allError;
 
