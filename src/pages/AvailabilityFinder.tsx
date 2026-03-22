@@ -9,6 +9,7 @@ import { Zap, Users, Clock, CalendarCheck, Info, ArrowRight, Loader2 } from "luc
 import { useFriends } from "@/hooks/useFriends";
 import { useEvents } from "@/hooks/useEvents";
 import { useAuth } from "@/contexts/AuthContext";
+// FIX: use the centralized supabase client — was incorrectly pointing to old integrations path
 import { supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
 import { addDays, format, isToday, isTomorrow, isWeekend, parseISO, isSameDay } from "date-fns";
@@ -35,7 +36,6 @@ export default function AvailabilityFinder() {
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [quickEventOpen, setQuickEventOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ date: Date; time: string } | null>(null);
-  // FIX 12: store fetched friend events keyed by userId
   const [friendEvents, setFriendEvents] = useState<Record<string, { event_date: string; event_time: string; end_time: string | null; title: string }[]>>({});
   const [loadingFriends, setLoadingFriends] = useState<Set<string>>(new Set());
 
@@ -53,8 +53,6 @@ export default function AvailabilityFinder() {
     );
   };
 
-
-  // FIX: removed stale cache check — always refetches when selectedFriendIds changes
   useEffect(() => {
     const fetchFriendEvents = async (userId: string) => {
       setLoadingFriends(prev => new Set(prev).add(userId));
@@ -62,36 +60,38 @@ export default function AvailabilityFinder() {
         const today = format(new Date(), "yyyy-MM-dd");
         const endDate = format(addDays(new Date(), DAYS_AHEAD), "yyyy-MM-dd");
 
-        // Get events they created — RLS on events table may block this
-        // so we wrap in try/catch and fall back to empty array
         let created: any[] = [];
-        try {
-          const { data, error } = await supabase
-            .from("events")
-            .select("event_date, event_time, end_time, title")
-            .eq("creator_id", userId)
-            .eq("is_completed", false)
-            .gte("event_date", today)
-            .lte("event_date", endDate);
-          if (!error && data) created = data;
-        } catch {}
+        const { data: createdData, error: createdError } = await supabase
+          .from("events")
+          .select("event_date, event_time, end_time, title")
+          .eq("creator_id", userId)
+          .eq("is_completed", false)
+          .gte("event_date", today)
+          .lte("event_date", endDate);
 
-        // Get events they accepted via event_responses
+        if (createdError) {
+          console.error("Error fetching friend created events:", createdError.message);
+        } else {
+          created = createdData || [];
+        }
+
         let accepted: any[] = [];
-        try {
-          const { data: responses, error } = await supabase
-            .from("event_responses")
-            .select("events(event_date, event_time, end_time, title)")
-            .eq("user_id", userId)
-            .eq("response", "yes");
+        const { data: responses, error: responsesError } = await supabase
+          .from("event_responses")
+          .select("events(event_date, event_time, end_time, title)")
+          .eq("user_id", userId)
+          .eq("response", "yes");
 
-          if (!error && responses) {
-            accepted = responses
-              .map((r: any) => r.events)
-              .filter(Boolean)
-              .filter((e: any) => e.event_date >= today && e.event_date <= endDate);
-          }
-        } catch {}
+        if (responsesError) {
+          console.error("Error fetching friend accepted events:", responsesError.message);
+        } else if (responses) {
+          accepted = responses
+            .map((r: any) => r.events)
+            .filter(Boolean)
+            .filter((e: any) => e.event_date >= today && e.event_date <= endDate);
+        }
+
+        console.log(`Friend ${userId} events:`, { created, accepted });
 
         setFriendEvents(prev => ({
           ...prev,
@@ -109,12 +109,10 @@ export default function AvailabilityFinder() {
       }
     };
 
-    // Clear old friend events and refetch all selected friends
     setFriendEvents({});
     selectedFriendIds.forEach(fetchFriendEvents);
   }, [selectedFriendIds]);
 
-  // My busy slots
   const myBusySlots = useMemo(() => {
     const busy = new Set<string>();
     events.forEach((event) => {
@@ -126,7 +124,6 @@ export default function AvailabilityFinder() {
     return busy;
   }, [events]);
 
-  // FIX 12: combined busy slots — my slots + all selected friends' slots
   const allBusySlots = useMemo(() => {
     const busy = new Set(myBusySlots);
     selectedFriendIds.forEach(userId => {
@@ -139,7 +136,6 @@ export default function AvailabilityFinder() {
     return busy;
   }, [myBusySlots, friendEvents, selectedFriendIds]);
 
-  // Slot is free only if EVERYONE is free
   const getSlotStatus = (day: Date, hour: number): "free" | "busy" | "my-busy" => {
     const dateStr = format(day, "yyyy-MM-dd");
     const key = `${dateStr}-${hour}`;
@@ -326,7 +322,7 @@ export default function AvailabilityFinder() {
             </CardHeader>
             <CardContent className="overflow-x-auto pb-4">
               <div className="min-w-[500px]">
-                {/* Day headers */}
+                {/* Day headers — days as columns */}
                 <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: `52px repeat(${DAYS_AHEAD}, 1fr)` }}>
                   <div />
                   {days.map((day) => (
@@ -358,6 +354,7 @@ export default function AvailabilityFinder() {
                           <Tooltip key={day.toISOString()} delayDuration={200}>
                             <TooltipTrigger asChild>
                               <button
+                                aria-label={`${formatHour(hour)} on ${format(day, "EEE MMM d")}`}
                                 onClick={() => handleSlotClick(day, hour)}
                                 disabled={status !== "free"}
                                 className={`h-10 rounded-md transition-all border text-[10px] font-medium w-full ${
