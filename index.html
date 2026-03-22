@@ -3,27 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary meta -->
     <title>SyncMates — Plan Together, Stay in Sync</title>
-    <meta name="description" content="The social scheduling app for friend groups. Find common free time and plan activities together — no more endless group chats." />
+    <meta name="description" content="The social scheduling app for friend groups. Find common free time, create events, and coordinate plans — no more endless group chats." />
     <meta name="author" content="SyncMates" />
+    <meta name="keywords" content="scheduling, social calendar, group planning, find free time, coordinate plans, friends" />
 
+    <!-- Canonical URL — update to syncmates.in once domain is live -->
+    <link rel="canonical" href="https://syncmates.in" />
+
+    <!-- Open Graph (WhatsApp, LinkedIn, Facebook previews) -->
     <meta property="og:title" content="SyncMates — Plan Together, Stay in Sync" />
-    <meta property="og:description" content="The social scheduling app for friend groups. Find common free time and plan activities together." />
+    <meta property="og:description" content="The social scheduling app for friend groups. Find common free time and plan activities together — no more endless group chats." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/logo.png" />
+    <meta property="og:url" content="https://syncmates.in" />
+    <meta property="og:image" content="https://syncmates.in/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content="SyncMates" />
+    <meta property="og:locale" content="en_IN" />
 
+    <!-- Twitter card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@SyncMates" />
-    <meta name="twitter:image" content="/logo.png" />
+    <meta name="twitter:title" content="SyncMates — Plan Together, Stay in Sync" />
+    <meta name="twitter:description" content="The social scheduling app for friend groups. Find common free time and plan activities together." />
+    <meta name="twitter:image" content="https://syncmates.in/og-image.png" />
 
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    <!--
-      FIX 16: Prevent theme flash on load.
-      This inline script runs BEFORE React renders, reads the saved theme from
-      localStorage, and applies it immediately so there's no white flash before
-      the ThemeProvider kicks in.
-    -->
+    <!-- Theme color for mobile browsers -->
+    <meta name="theme-color" content="#16a34a" />
+
+    <!-- Prevent theme flash on load -->
     <script>
       (function () {
         try {
