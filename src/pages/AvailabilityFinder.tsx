@@ -69,9 +69,7 @@ export default function AvailabilityFinder() {
           .gte("event_date", today)
           .lte("event_date", endDate);
 
-        if (createdError) {
-          console.error("Error fetching friend created events:", createdError.message);
-        } else {
+        if (!createdError) {
           created = createdData || [];
         }
 
@@ -82,23 +80,19 @@ export default function AvailabilityFinder() {
           .eq("user_id", userId)
           .eq("response", "yes");
 
-        if (responsesError) {
-          console.error("Error fetching friend accepted events:", responsesError.message);
-        } else if (responses) {
+        if (!responsesError && responses) {
           accepted = responses
             .map((r: any) => r.events)
             .filter(Boolean)
             .filter((e: any) => e.event_date >= today && e.event_date <= endDate);
         }
 
-        console.log(`Friend ${userId} events:`, { created, accepted });
-
         setFriendEvents(prev => ({
           ...prev,
           [userId]: [...created, ...accepted],
         }));
       } catch (err) {
-        console.error("Failed to fetch friend events:", err);
+        // silently ignore — grid just shows all green if fetch fails
         setFriendEvents(prev => ({ ...prev, [userId]: [] }));
       } finally {
         setLoadingFriends(prev => {
