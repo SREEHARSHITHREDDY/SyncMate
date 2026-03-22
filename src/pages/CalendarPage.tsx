@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Filter, Calendar, CheckSquare, Bell, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Filter } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useEvents, EventWithResponse } from "@/hooks/useEvents";
@@ -11,26 +11,19 @@ import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarDayView } from "@/components/calendar/CalendarDayView";
 import { CalendarWeekView } from "@/components/calendar/CalendarWeekView";
-import { CalendarMonthView } from "@/components/calendar/CalendarMonthView";
+import { CalendarMonthView, CalendarTask } from "@/components/calendar/CalendarMonthView";
 import { CalendarYearView } from "@/components/calendar/CalendarYearView";
 import { CalendarMiniMonth } from "@/components/calendar/CalendarMiniMonth";
 import { EventDetailsSidebar } from "@/components/calendar/EventDetailsSidebar";
 import { CategoryFilter } from "@/components/calendar/CategoryFilter";
 import { QuickEventDialog } from "@/components/calendar/QuickEventDialog";
 import { EditEventDialog } from "@/components/EditEventDialog";
-import { CreateTaskDialog } from "@/components/CreateTaskDialog";
 import { CategoryType } from "@/lib/eventCategories";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 interface EventException {
   id: string;
@@ -48,19 +41,11 @@ export default function CalendarPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [selectedEvent, setSelectedEvent] = useState<(EventWithResponse & { isCancelled?: boolean }) | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<CategoryType[]>([]);
-
-  // Quick event dialog
   const [quickEventOpen, setQuickEventOpen] = useState(false);
   const [quickEventDate, setQuickEventDate] = useState<Date>();
   const [quickEventTime, setQuickEventTime] = useState<string>();
-
-  // Edit event dialog
   const [editEventOpen, setEditEventOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<EventWithResponse | null>(null);
-
-  // Create task/reminder dialog
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [taskDialogType, setTaskDialogType] = useState<"task" | "reminder">("task");
 
   const { data: allExceptions = [] } = useQuery({
     queryKey: ["all-event-exceptions", user?.id],
@@ -76,6 +61,23 @@ export default function CalendarPage() {
       return data as EventException[];
     },
     enabled: !!user && events.length > 0,
+  });
+
+  // FIX: Fetch tasks and reminders with due dates to show on calendar
+  const { data: calendarTasks = [] } = useQuery({
+    queryKey: ["calendar-tasks", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await (supabase as any)
+        .from("action_items")
+        .select("id, content, due_date, is_completed, item_type, priority")
+        .eq("assignee_id", user.id)
+        .eq("is_completed", false)
+        .not("due_date", "is", null);
+      if (error) throw error;
+      return (data || []) as CalendarTask[];
+    },
+    enabled: !!user,
     staleTime: 1000 * 60 * 2,
   });
 
@@ -88,7 +90,7 @@ export default function CalendarPage() {
     });
     if (selectedCategories.length > 0) {
       filtered = filtered.filter(event =>
-        selectedCategories.includes(((event as any).category || "general") as CategoryType)
+        selectedCategories.includes(((event as any).category || "default") as CategoryType)
       );
     }
     return filtered;
@@ -152,18 +154,20 @@ export default function CalendarPage() {
     setQuickEventOpen(true);
   };
 
-  const openCreateTask = (type: "task" | "reminder") => {
-    setTaskDialogType(type);
-    setTaskDialogOpen(true);
+  const handleCategoryToggle = (category: CategoryType) => {
+    setSelectedCategories(prev =>
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
   };
 
   return (
     <AppLayout>
       <div className="h-[calc(100vh-4rem)] flex flex-col">
-        {/* Top bar */}
+        {/* Top Navigation Bar */}
         <div className="flex-shrink-0 border-b border-border bg-background px-4 py-3">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            {/* Left — navigation */}
             <div className="flex items-center gap-3">
               <Button variant="outline" size="icon" className="h-8 w-8" onClick={goToPrev}>
                 <ChevronLeft className="h-4 w-4" />
@@ -174,7 +178,6 @@ export default function CalendarPage() {
               <h1 className="text-xl font-semibold">{getHeaderTitle()}</h1>
             </div>
 
-            {/* Center — view tabs */}
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
               <TabsList className="bg-secondary">
                 <TabsTrigger value="day" className="px-4">Day</TabsTrigger>
@@ -184,9 +187,7 @@ export default function CalendarPage() {
               </TabsList>
             </Tabs>
 
-            {/* Right — actions */}
             <div className="flex items-center gap-2">
-              {/* Category filter */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2">
@@ -204,63 +205,27 @@ export default function CalendarPage() {
                     <p className="text-sm font-medium">Filter by Category</p>
                     <CategoryFilter
                       selectedCategories={selectedCategories}
-                      onCategoryToggle={(cat) =>
-                        setSelectedCategories(prev =>
-                          prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-                        )
-                      }
-                      onClearAll={() => setSelectedCategories([])}
+                      onCategoryToggle={handleCategoryToggle}
                     />
                   </div>
                 </PopoverContent>
               </Popover>
 
-              <Button variant="outline" size="sm" onClick={goToToday}>
-                Today
-              </Button>
+              <Button variant="outline" size="sm" onClick={goToToday}>Today</Button>
 
-              {/* ── CREATE DROPDOWN ── */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Create</span>
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setQuickEventDate(selectedDate);
-                      setQuickEventTime("09:00");
-                      setQuickEventOpen(true);
-                    }}
-                    className="gap-2"
-                  >
-                    <Calendar className="h-4 w-4 text-primary" />
-                    Event
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => openCreateTask("task")}
-                    className="gap-2"
-                  >
-                    <CheckSquare className="h-4 w-4 text-amber-500" />
-                    Task
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => openCreateTask("reminder")}
-                    className="gap-2"
-                  >
-                    <Bell className="h-4 w-4 text-violet-500" />
-                    Reminder
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button size="sm" className="gap-2" onClick={() => {
+                setQuickEventDate(selectedDate);
+                setQuickEventTime("09:00");
+                setQuickEventOpen(true);
+              }}>
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Create Event</span>
+              </Button>
             </div>
           </div>
         </div>
 
-        {/* Main content */}
+        {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 overflow-auto p-4">
             {viewMode === "day" && (
@@ -284,6 +249,7 @@ export default function CalendarPage() {
               <CalendarMonthView
                 selectedDate={selectedDate}
                 events={eventsWithStatus}
+                tasks={calendarTasks}
                 onDateClick={handleDateClick}
                 onEventClick={handleEventClick}
               />
@@ -297,7 +263,7 @@ export default function CalendarPage() {
             )}
           </div>
 
-          {/* Right sidebar */}
+          {/* Right Sidebar */}
           <div className="w-72 border-l border-border p-4 flex-shrink-0 overflow-auto hidden lg:block">
             <div className="mb-6">
               <CalendarMiniMonth
@@ -309,6 +275,7 @@ export default function CalendarPage() {
                 onMonthChange={setSelectedDate}
               />
             </div>
+
             {selectedEvent && (
               <div className="border-t border-border pt-4">
                 <EventDetailsSidebar event={selectedEvent} />
@@ -331,23 +298,17 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Dialogs */}
       <QuickEventDialog
         open={quickEventOpen}
         onOpenChange={setQuickEventOpen}
         initialDate={quickEventDate}
         initialTime={quickEventTime}
       />
+
       <EditEventDialog
         event={eventToEdit}
         open={editEventOpen}
         onOpenChange={setEditEventOpen}
-      />
-      <CreateTaskDialog
-        open={taskDialogOpen}
-        onOpenChange={setTaskDialogOpen}
-        defaultType={taskDialogType}
-        initialDate={selectedDate}
       />
     </AppLayout>
   );
