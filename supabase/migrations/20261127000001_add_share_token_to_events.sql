@@ -6,9 +6,16 @@ UPDATE events SET share_token = gen_random_uuid() WHERE share_token IS NULL;
 
 -- Allow anyone (including unauthenticated) to read a single event by its share_token
 -- This is safe because the token acts as a secret — only people with the link can access it
-CREATE POLICY IF NOT EXISTS "Public can read event by share_token"
-  ON events FOR SELECT
-  USING (share_token IS NOT NULL);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'Public can read event by share_token' AND tablename = 'events'
+  ) THEN
+    CREATE POLICY "Public can read event by share_token"
+      ON events FOR SELECT
+      USING (share_token IS NOT NULL);
+  END IF;
+END $$;
 
 -- Table to store public RSVPs (from people without an account)
 CREATE TABLE IF NOT EXISTS public_rsvps (
@@ -24,12 +31,12 @@ CREATE TABLE IF NOT EXISTS public_rsvps (
 -- Anyone can insert a public RSVP
 ALTER TABLE public_rsvps ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Anyone can submit a public RSVP"
+CREATE POLICY "Anyone can submit a public RSVP"
   ON public_rsvps FOR INSERT
   WITH CHECK (true);
 
 -- Event creator can read RSVPs for their events
-CREATE POLICY IF NOT EXISTS "Creator can read RSVPs for their events"
+CREATE POLICY "Creator can read RSVPs for their events"
   ON public_rsvps FOR SELECT
   USING (
     event_id IN (SELECT id FROM events WHERE creator_id = auth.uid())
