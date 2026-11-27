@@ -49,7 +49,12 @@ export function EventDetailsSidebar({ event }: EventDetailsSidebarProps) {
 
         <div className="flex items-center gap-3 text-sm">
           <Clock className="h-4 w-4 text-muted-foreground" />
-          <span>{event.event_time.slice(0, 5)}</span>
+          <span>
+            {event.event_time.slice(0, 5)}
+            {(event as any).end_time && (
+              <> → {String((event as any).end_time).slice(0, 5)}</>
+            )}
+          </span>
         </div>
 
         {event.recurrence_type && (

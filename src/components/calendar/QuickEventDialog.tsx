@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { CalendarIcon, Loader2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,6 +49,7 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
   const [description, setDescription] = useState("");
   const [date, setDate] = useState<Date | undefined>(initialDate);
   const [time, setTime] = useState(initialTime || "09:00");
+  const [endTime, setEndTime] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [category, setCategory] = useState<CategoryType>("default");
 
@@ -58,6 +59,7 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
     if (open) {
       if (initialDate) setDate(initialDate);
       if (initialTime) setTime(initialTime);
+      setEndTime("");
     }
   }, [open, initialDate, initialTime]);
 
@@ -78,6 +80,7 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
           description: description.trim() || null,
           event_date: format(date, "yyyy-MM-dd"),
           event_time: time,
+          end_time: endTime || null,
           priority,
           category,
         });
@@ -90,6 +93,7 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
       // Reset form
       setTitle("");
       setDescription("");
+      setEndTime("");
       setPriority("medium");
       setCategory("default");
 
@@ -163,7 +167,7 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="quick-time">Time *</Label>
+              <Label htmlFor="quick-time">Start Time *</Label>
               <Input
                 id="quick-time"
                 type="time"
@@ -171,6 +175,19 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
                 onChange={(e) => setTime(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="quick-end-time">End Time <span className="text-muted-foreground">(optional)</span></Label>
+            <Input
+              id="quick-end-time"
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+            />
+            {endTime && time && endTime <= time && (
+              <p className="text-xs text-destructive">End time must be after start time</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
