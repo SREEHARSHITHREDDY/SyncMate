@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Calendar, Users, Bell, LayoutDashboard, LogIn, LogOut, Menu, X, Settings, FileText, User, ListTodo, Zap } from "lucide-react";
+import { Calendar, Users, Bell, LayoutDashboard, LogIn, LogOut, Menu, X, Settings, FileText, User, ListTodo, Zap, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -97,6 +97,11 @@ export function Navbar() {
                 <DropdownMenuItem asChild>
                   <Link to="/settings" className="flex items-center gap-2">
                     <Settings className="h-4 w-4" />Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/pricing" className="flex items-center gap-2 text-green-600">
+                    <Crown className="h-4 w-4" />Upgrade to Pro
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

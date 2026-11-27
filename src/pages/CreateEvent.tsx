@@ -9,7 +9,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useFriends } from "@/hooks/useFriends";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
+import { usePlan } from "@/hooks/usePlan";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -43,6 +44,8 @@ export default function CreateEvent() {
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [category, setCategory] = useState<CategoryType>("general");
+  const [eventType, setEventType] = useState<"class" | "meeting" | "event">("event");
+  const { plan, weeklyEventCount, canCreateSocialEvent, limit } = usePlan();
 
   // FIX 10: track whether selected date+time is in the past
   const isPastDateTime = (() => {
@@ -95,6 +98,15 @@ export default function CreateEvent() {
     if (!time) { toast.error("Please select a time"); return; }
     if (endTime && endTime <= time) { toast.error("End time must be after start time"); return; }
 
+    // Free tier check
+    if (eventType === "event" && !canCreateSocialEvent) {
+      toast.error(`Free plan: ${limit} social events per week used.`, {
+        action: { label: "Upgrade to Pro", onClick: () => navigate("/pricing") },
+        duration: 6000,
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const { data: event, error: eventError } = await supabase
@@ -109,6 +121,7 @@ export default function CreateEvent() {
           color: color || null,
           priority,
           category,
+          event_type: eventType,
           recurrence_type: recurrenceType === "none" ? null : recurrenceType,
           recurrence_end_date: recurrenceEndDate ? format(recurrenceEndDate, "yyyy-MM-dd") : null,
         })
@@ -151,6 +164,41 @@ export default function CreateEvent() {
             <CardDescription>Fill in the basics about your event</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Event type */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">What kind of event is this?</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["class", "meeting", "event"] as const).map((type) => {
+                  const labels = { class: "📚 Class", meeting: "💼 Meeting", event: "🎉 Social" };
+                  const descs = { class: "Lecture, tutorial", meeting: "Work, standup", event: "Hangout, movie, trip" };
+                  const isSelected = eventType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setEventType(type)}
+                      className={`rounded-lg border p-3 text-left transition-colors ${
+                        isSelected
+                          ? "border-green-500 bg-green-500/10"
+                          : "border-border bg-background hover:border-green-400"
+                      }`}
+                    >
+                      <div className={`text-sm font-medium ${isSelected ? "text-green-700 dark:text-green-400" : ""}`}>{labels[type]}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{descs[type]}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              {eventType === "event" && plan === "free" && (
+                <div className={`rounded-lg px-3 py-2 text-sm ${canCreateSocialEvent ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}>
+                  {canCreateSocialEvent
+                    ? `${weeklyEventCount}/${limit} social events used this week (free plan)`
+                    : <>Limit reached ({weeklyEventCount}/{limit}). <button type="button" onClick={() => navigate("/pricing")} className="underline font-medium">Upgrade to Pro →</button></>
+                  }
+                </div>
+              )}
+            </div>
+
             {/* Title */}
             <div className="space-y-2">
               <Label htmlFor="title" className="flex items-center gap-2">

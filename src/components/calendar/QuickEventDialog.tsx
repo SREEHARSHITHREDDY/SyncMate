@@ -32,6 +32,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { CATEGORY_COLORS, CategoryType } from "@/lib/eventCategories";
+import { usePlan } from "@/hooks/usePlan";
+import { useNavigate } from "react-router-dom";
 
 interface QuickEventDialogProps {
   open: boolean;
@@ -43,6 +45,8 @@ interface QuickEventDialogProps {
 export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime }: QuickEventDialogProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { plan, weeklyEventCount, canCreateSocialEvent, limit } = usePlan();
   const [isSaving, setIsSaving] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -52,6 +56,7 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
   const [endTime, setEndTime] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [category, setCategory] = useState<CategoryType>("default");
+  const [eventType, setEventType] = useState<"class" | "meeting" | "event">("event");
 
   // FIX: was useState(() => {...}) which silently does nothing.
   // useEffect correctly syncs props when dialog opens.
@@ -69,6 +74,18 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
       return;
     }
 
+    // Free tier check: only social events are capped
+    if (eventType === "event" && !canCreateSocialEvent) {
+      toast.error(`Free plan: ${limit} social events per week used. Upgrade to Pro for unlimited!`, {
+        action: {
+          label: "Upgrade",
+          onClick: () => { onOpenChange(false); navigate("/pricing"); },
+        },
+        duration: 6000,
+      });
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -83,6 +100,7 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
           end_time: endTime || null,
           priority,
           category,
+          event_type: eventType,
         });
 
       if (error) throw error;
@@ -96,6 +114,7 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
       setEndTime("");
       setPriority("medium");
       setCategory("default");
+      setEventType("event");
 
       onOpenChange(false);
     } catch (error: any) {
@@ -187,6 +206,45 @@ export function QuickEventDialog({ open, onOpenChange, initialDate, initialTime 
             />
             {endTime && time && endTime <= time && (
               <p className="text-xs text-destructive">End time must be after start time</p>
+            )}
+          </div>
+
+          {/* Event type selector */}
+          <div className="space-y-2">
+            <Label>What is this?</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {(["class", "meeting", "event"] as const).map((type) => {
+                const labels = { class: "📚 Class", meeting: "💼 Meeting", event: "🎉 Social" };
+                const isSelected = eventType === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setEventType(type)}
+                    className={`rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${
+                      isSelected
+                        ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400"
+                        : "border-border bg-background text-muted-foreground hover:border-green-400"
+                    }`}
+                  >
+                    {labels[type]}
+                  </button>
+                );
+              })}
+            </div>
+            {eventType === "event" && plan === "free" && (
+              <p className="text-xs text-muted-foreground">
+                {weeklyEventCount}/{limit} social events used this week
+                {!canCreateSocialEvent && (
+                  <button
+                    type="button"
+                    onClick={() => { onOpenChange(false); navigate("/pricing"); }}
+                    className="ml-1 text-green-600 underline font-medium"
+                  >
+                    Upgrade to Pro
+                  </button>
+                )}
+              </p>
             )}
           </div>
 

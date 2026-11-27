@@ -21,6 +21,7 @@ import Templates from "./pages/Templates";
 import MyTasks from "./pages/MyTasks";
 import AvailabilityFinder from "./pages/AvailabilityFinder";
 import RsvpPage from "./pages/RsvpPage";
+import Pricing from "./pages/Pricing";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -46,6 +47,7 @@ const App = () => {
                   <Route path="/" element={<Index />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/rsvp/:token" element={<RsvpPage />} />
+                  <Route path="/pricing" element={<Pricing />} />
 
                   {/* Protected routes */}
                   <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
