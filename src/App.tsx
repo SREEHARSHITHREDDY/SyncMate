@@ -1,6 +1,3 @@
-import { useEffect } from "react";
-import { supabase } from "@/lib/supabase"; // make sure this path is correct
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -23,6 +20,7 @@ import Profile from "./pages/Profile";
 import Templates from "./pages/Templates";
 import MyTasks from "./pages/MyTasks";
 import AvailabilityFinder from "./pages/AvailabilityFinder";
+import RsvpPage from "./pages/RsvpPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -34,30 +32,6 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
-
-  // 🔥 DEBUG AUTH STATE
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      console.log("SESSION:", data.session);
-
-      const { data: user } = await supabase.auth.getUser();
-      console.log("USER:", user);
-    };
-
-    checkSession();
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log("AUTH CHANGE:", event, session);
-      }
-    );
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
@@ -71,6 +45,7 @@ const App = () => {
                   {/* Public routes */}
                   <Route path="/" element={<Index />} />
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/rsvp/:token" element={<RsvpPage />} />
 
                   {/* Protected routes */}
                   <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

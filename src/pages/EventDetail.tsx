@@ -6,13 +6,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 import { AvailabilityGrid } from "@/components/AvailabilityGrid";
 import { CommitmentPanel } from "@/components/CommitmentPanel";
 import { LifecycleTracker } from "@/components/LifecycleTracker";
 import { FreezePlanButton } from "@/components/FreezePlanButton";
 import { usePlanLifecycle, LifecycleStatus } from "@/hooks/usePlanLifecycle";
-import { Calendar, Clock, ArrowLeft, Loader2, Flag } from "lucide-react";
+import { Calendar, Clock, ArrowLeft, Loader2, Flag, Share2 } from "lucide-react";
+import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 
 export default function EventDetail() {
@@ -88,6 +89,7 @@ export default function EventDetail() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold mb-1">{event.title}</h1>
+
               <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3.5 w-3.5" />
@@ -107,6 +109,27 @@ export default function EventDetail() {
                 <p className="text-muted-foreground mt-2">{event.description}</p>
               )}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5"
+              onClick={() => {
+                const token = (event as any).share_token;
+                if (!token) {
+                  toast.error("Share link not available yet. Try refreshing.");
+                  return;
+                }
+                const link = `${window.location.origin}/rsvp/${token}`;
+                navigator.clipboard.writeText(link).then(() => {
+                  toast.success("RSVP link copied to clipboard!");
+                }).catch(() => {
+                  toast.info(`Share this link: ${link}`);
+                });
+              }}
+            >
+              <Share2 className="h-4 w-4" />
+              Share & RSVP
+            </Button>
           </div>
         </div>
 
