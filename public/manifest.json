@@ -1,0 +1,43 @@
+{
+  "name": "SyncMates",
+  "short_name": "SyncMates",
+  "description": "Plan together, stay in sync. Social scheduling for friend groups.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#16a34a",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en-IN",
+  "categories": ["productivity", "social"],
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Find Time",
+      "short_name": "Find Time",
+      "description": "Find common free time with friends",
+      "url": "/find-time",
+      "icons": [{ "src": "/logo.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "New Event",
+      "short_name": "New Event",
+      "description": "Create a new event",
+      "url": "/create-event",
+      "icons": [{ "src": "/logo.png", "sizes": "96x96" }]
+    }
+  ]
+}

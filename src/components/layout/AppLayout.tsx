@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Navbar } from "./Navbar";
 import { AIAssistantButton } from "@/components/AIAssistantButton";
+import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -14,6 +15,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         {children}
       </main>
       <AIAssistantButton />
+      <PwaInstallBanner />
     </div>
   );
 }
