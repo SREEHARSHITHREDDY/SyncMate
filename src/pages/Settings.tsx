@@ -1,6 +1,7 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { NotificationPreferencesCard } from "@/components/NotificationPreferencesCard";
 import { CalendarPermissionsCard } from "@/components/CalendarPermissionsCard";
+import { GoogleCalendarCard } from "@/components/GoogleCalendarCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -110,6 +111,9 @@ export default function Settings() {
 
           {/* Notification Preferences */}
           <NotificationPreferencesCard />
+
+          {/* Google Calendar Sync */}
+          <GoogleCalendarCard />
 
           {/* Calendar Permissions */}
           <CalendarPermissionsCard />

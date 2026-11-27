@@ -12,9 +12,10 @@ import { CommitmentPanel } from "@/components/CommitmentPanel";
 import { LifecycleTracker } from "@/components/LifecycleTracker";
 import { FreezePlanButton } from "@/components/FreezePlanButton";
 import { usePlanLifecycle, LifecycleStatus } from "@/hooks/usePlanLifecycle";
-import { Calendar, Clock, ArrowLeft, Loader2, Flag, Share2 } from "lucide-react";
+import { Calendar, Clock, ArrowLeft, Loader2, Flag, Share2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
+import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 
 export default function EventDetail() {
   const { user, loading } = useAuth();
@@ -41,6 +42,7 @@ export default function EventDetail() {
   });
 
   const { setSuggestedTime, updateLifecycle } = usePlanLifecycle(eventId || "");
+  const { connected: gcalConnected, syncing: gcalSyncing, pushEvent } = useGoogleCalendar();
 
   const event = eventQuery.data;
   const isCreator = event?.creator_id === user?.id;
@@ -109,27 +111,44 @@ export default function EventDetail() {
                 <p className="text-muted-foreground mt-2">{event.description}</p>
               )}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-1.5"
-              onClick={() => {
-                const token = (event as any).share_token;
-                if (!token) {
-                  toast.error("Share link not available yet. Try refreshing.");
-                  return;
-                }
-                const link = `${window.location.origin}/rsvp/${token}`;
-                navigator.clipboard.writeText(link).then(() => {
-                  toast.success("RSVP link copied to clipboard!");
-                }).catch(() => {
-                  toast.info(`Share this link: ${link}`);
-                });
-              }}
-            >
-              <Share2 className="h-4 w-4" />
-              Share & RSVP
-            </Button>
+            <div className="flex gap-2 shrink-0">
+              {gcalConnected && isCreator && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={gcalSyncing}
+                  onClick={() => pushEvent(event.id)}
+                >
+                  {gcalSyncing
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <RefreshCw className="h-4 w-4" />
+                  }
+                  {(event as any).google_calendar_event_id ? "Re-sync" : "Sync to Google"}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => {
+                  const token = (event as any).share_token;
+                  if (!token) {
+                    toast.error("Share link not available yet. Try refreshing.");
+                    return;
+                  }
+                  const link = `${window.location.origin}/rsvp/${token}`;
+                  navigator.clipboard.writeText(link).then(() => {
+                    toast.success("RSVP link copied to clipboard!");
+                  }).catch(() => {
+                    toast.info(`Share this link: ${link}`);
+                  });
+                }}
+              >
+                <Share2 className="h-4 w-4" />
+                Share & RSVP
+              </Button>
+            </div>
           </div>
         </div>
 
